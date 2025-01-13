@@ -219,7 +219,7 @@ class DMSupport(commands.Cog):
         await message.channel.send(f"✅ Dein Ticket wurde erstellt. Ticket-ID: {ticket_id}. Ein Supporter wird sich melden.")
         print(f"✅ Neues Ticket {ticket_id} für Benutzer-ID {message.author.id} erstellt.")
 
-    @app_commands.command(name="close_ticket")
+    @app_commands.command(name="close_dm_ticket")
     @commands.has_permissions(manage_messages=True)
     async def close_ticket_command(self, ctx, ticket_id: str):
         """Schließt ein Ticket."""
