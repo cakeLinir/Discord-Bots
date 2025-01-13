@@ -57,7 +57,7 @@ class Tickets(commands.Cog):
     def initialize_database(self):
         """Erstellt die Tabelle für Tickets."""
         query = """
-        CREATE TABLE IF NOT EXISTS tickets (
+        CREATE TABLE IF NOT EXISTS tickets_new (
             id INT AUTO_INCREMENT PRIMARY KEY,
             user_id BIGINT NOT NULL,
             channel_id BIGINT NOT NULL,
@@ -84,6 +84,38 @@ class Tickets(commands.Cog):
                 self.config[f"{name}_id"] = category_id
         self.save_config()
 
+    def create_ticket(self, user_id, channel_id, channel_name, message=None):
+        """Speichert ein neues Ticket in der Datenbank und gibt die Ticket-ID zurück."""
+        try:
+            query = """
+            INSERT INTO tickets_new (user_id, channel_id, channel_name, message)
+            VALUES (%s, %s, %s, %s)
+            """
+            cursor = self.db_connection.cursor()
+            cursor.execute(query, (user_id, channel_id, channel_name, message))
+            self.db_connection.commit()
+            ticket_id = cursor.lastrowid  # Automatisch generierte ID abrufen
+            cursor.close()
+            return ticket_id
+        except mysql.connector.Error as e:
+            print(f"[ERROR] Fehler bei create_ticket: {e}")
+            return None
+
+    def update_ticket_channel(self, ticket_id, channel_id, channel_name):
+        """Aktualisiert die Kanal-ID und den Namen eines Tickets in der Datenbank."""
+        try:
+            query = """
+            UPDATE tickets_new
+            SET channel_id = %s, channel_name = %s
+            WHERE id = %s
+            """
+            cursor = self.db_connection.cursor()
+            cursor.execute(query, (channel_id, channel_name, ticket_id))
+            self.db_connection.commit()
+            cursor.close()
+        except mysql.connector.Error as e:
+            print(f"[ERROR] Fehler bei update_ticket_channel: {e}")
+
     async def setup_categories(self, guild):
         """Erstellt die Kategorien, falls sie nicht existieren, und speichert deren IDs."""
         for name in self.categories.keys():
@@ -95,7 +127,7 @@ class Tickets(commands.Cog):
         self.save_category_ids()
 
     async def setup_ticket_channel(self, guild):
-        """Erstellt den Ticket-Menü-Kanal oder aktualisiert das bestehende Embed."""
+        """Erstellt oder aktualisiert den Ticket-Menü-Kanal."""
         menu_channel_id = self.config.get("menu_channel_id")
         menu_channel = discord.utils.get(guild.text_channels, id=menu_channel_id)
 
@@ -107,21 +139,13 @@ class Tickets(commands.Cog):
             self.config["menu_channel_id"] = menu_channel.id
             self.save_config()
 
-        # Prüfen, ob bereits ein Embed existiert
-        async for message in menu_channel.history(limit=50):  # Suche in den letzten 50 Nachrichten
+        # Prüfen, ob ein gültiges Embed existiert
+        async for message in menu_channel.history(limit=50):
             if message.author == self.bot.user and message.embeds:
-                print("[DEBUG] Vorhandenes Embed gefunden. Aktualisierung...")
-                # Vorhandenes Embed aktualisieren
-                embed = discord.Embed(
-                    title="🎫 Ticket-Support",
-                    description="Klicke auf den Button unten, um ein Ticket zu erstellen.",
-                    color=0x3498db,
-                )
-                view = TicketView(self.bot)
-                await message.edit(embed=embed, view=view)
+                print("[DEBUG] Vorhandenes Embed gefunden. Keine neuen Posts erforderlich.")
                 return
 
-        # Neues Embed posten, falls keines gefunden wurde
+        # Neues Embed posten
         embed = discord.Embed(
             title="🎫 Ticket-Support",
             description="Klicke auf den Button unten, um ein Ticket zu erstellen.",
@@ -132,17 +156,17 @@ class Tickets(commands.Cog):
         print("[DEBUG] Neues Ticket-Embed gepostet.")
 
     async def get_ticket_by_user(self, user_id):
-        """Holt das Ticket eines Benutzers anhand der Benutzer-ID."""
+        """Holt das Ticket eines Benutzers."""
+        cursor = self.db_connection.cursor(dictionary=True)
         try:
-            cursor = self.db_connection.cursor(dictionary=True)
-            query = "SELECT id, user_id, channel_id, channel_name, status FROM tickets WHERE user_id = %s AND status = 'open'"
+            query = "SELECT * FROM tickets WHERE user_id = %s AND status = 'open'"
             cursor.execute(query, (user_id,))
-            ticket = cursor.fetchone()
-            cursor.close()
-            return ticket
+            return cursor.fetchone()
         except Exception as e:
             print(f"[ERROR] Fehler bei get_ticket_by_user: {e}")
             return None
+        finally:
+            cursor.close()
 
     @app_commands.command(name="setup_tickets", description="Richtet die Ticket-Kategorien und das System ein.")
     @app_commands.default_permissions(administrator=True)
@@ -178,6 +202,8 @@ class TicketActionView(View):
                 ephemeral=True,
             )
             return
+        if tickets_cog:
+            tickets_cog.initialize_database()
 
         closed_category_id = tickets_cog.categories.get("geschlossen")
         closed_category = discord.utils.get(guild.categories, id=closed_category_id)
@@ -255,16 +281,23 @@ class TicketView(View):
                 return
 
             # Ticket-Details in der Datenbank speichern
-            ticket_id = tickets_cog.create_ticket(user.id, ticket_channel.id, ticket_channel.name)
-            view = TicketActionView(ticket_channel.id, self.bot)
-            await ticket_channel.send(
-                f"Willkommen im Ticket, {user.mention}! Ein Supporter wird sich bald um dich kümmern.",
-                view=view
+            ticket_id = tickets_cog.create_ticket(user.id, 0, "", "Initiale Nachricht")
+            if not ticket_id:
+                await interaction.followup.send("Fehler beim Erstellen des Tickets. Bitte versuche es erneut.",
+                                                ephemeral=True)
+                return
+
+            ticket_channel_name = f"ticket-{str(ticket_id).zfill(3)}"  # Z. B. ticket-001
+            ticket_channel = await guild.create_text_channel(
+                name=ticket_channel_name,
+                overwrites={
+                    guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                    user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+                },
+                category=erstellte_category,
             )
-            await interaction.followup.send(
-                f"Dein Ticket wurde erstellt: {ticket_channel.mention}",
-                ephemeral=True
-            )
+            tickets_cog.update_ticket_channel(ticket_id, ticket_channel.id, ticket_channel_name)
+
         except Exception as e:
             print(f"[ERROR] Fehler bei der Verarbeitung der Interaktion: {e}")
             await interaction.followup.send("Ein Fehler ist aufgetreten. Bitte versuche es später erneut.",
