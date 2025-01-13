@@ -1,0 +1,6 @@
+discord.py
+requests
+tinydb
+python-dotenv
+aiomysql
+mysql
