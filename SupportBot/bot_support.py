@@ -39,12 +39,16 @@ intents = discord.Intents.default()
 intents.messages = True
 intents.message_content = True
 intents.guilds = True
+intents.reactions = True
 bot = commands.Bot(command_prefix="!", intents=intents, application_id=int(config["application_id"]))
 
 
 # Event: Bot ist bereit
 @bot.event
 async def on_ready():
+    print("Slash-Commands werden synchronisiert...")
+    await bot.tree.sync()
+    print("Slash-Commands synchronisiert!")
     print(f"✅ Bot ist bereit! Eingeloggt als {bot.user} (ID: {bot.user.id})")
     print(f"✅ Verbundene Server: {[guild.name for guild in bot.guilds]}")
     print(f"✅ Intents aktiviert: {bot.intents}")
