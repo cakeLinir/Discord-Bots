@@ -39,12 +39,16 @@ intents = discord.Intents.default()
 intents.messages = True
 intents.message_content = True
 intents.guilds = True
+intents.reactions = True
 bot = commands.Bot(command_prefix="!", intents=intents, application_id=int(config["application_id"]))
 
 
 # Event: Bot ist bereit
 @bot.event
 async def on_ready():
+    print("Slash-Commands werden synchronisiert...")
+    await bot.tree.sync()
+    print("Slash-Commands synchronisiert!")
     print(f"✅ Bot ist bereit! Eingeloggt als {bot.user} (ID: {bot.user.id})")
     print(f"✅ Verbundene Server: {[guild.name for guild in bot.guilds]}")
     print(f"✅ Intents aktiviert: {bot.intents}")
@@ -52,8 +56,15 @@ async def on_ready():
 
 # Lade Cogs
 async def load_cogs():
-    for filename in os.listdir("./cogs"):
-        # Nur .py-Dateien laden, die nicht `__init__.py` heißen
+    # Pfad eine Ebene höher suchen
+    cogs_directory = os.path.join(os.path.dirname(__file__), "cogs")
+    print(f"[DEBUG] Cogs-Verzeichnis: {cogs_directory}")
+
+    if not os.path.exists(cogs_directory):
+        print("❌ Der Ordner 'cogs' existiert nicht.")
+        return
+
+    for filename in os.listdir(cogs_directory):
         if filename.endswith(".py") and filename != "__init__.py":
             cog_name = f"cogs.{filename[:-3]}"
             try:
@@ -61,6 +72,9 @@ async def load_cogs():
                 print(f"✅ Cog '{cog_name}' erfolgreich geladen.")
             except Exception as e:
                 print(f"❌ Fehler beim Laden des Cogs '{cog_name}': {e}")
+
+    
+
 
 
 

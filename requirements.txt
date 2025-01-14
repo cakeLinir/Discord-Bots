@@ -4,3 +4,4 @@ tinydb
 python-dotenv
 aiomysql
 mysql
+mysql.connector
