@@ -32,7 +32,7 @@ class Moderation(commands.Cog):
         with open(config_path, "w") as file:
             json.dump(self.config, file, indent=4)
 
-    def is_authorized(self):
+    def is_authorized(self, interaction: discord.Interaction) -> bool:
         """Check, ob der Benutzer eine Supportrolle oder ein Supportuser ist."""
 
         async def predicate(interaction: discord.Interaction):
@@ -161,7 +161,6 @@ class Moderation(commands.Cog):
 
     @app_commands.command(name="ban", description="Bannt einen Benutzer permanent oder mit einem Grund.")
     @app_commands.describe(user="Die UserID oder der Nickname des Benutzers.", reason="Optional: Grund für den Bann.")
-    @is_authorized()
     async def ban(self, interaction: discord.Interaction, user: str, reason: str = "Kein Grund angegeben"):
         """Bannt einen Benutzer dauerhaft."""
         member = await self.fetch_member(interaction.guild, user)
@@ -183,7 +182,6 @@ class Moderation(commands.Cog):
 
     @app_commands.command(name="temp_ban", description="Bannt einen Benutzer temporär.")
     @app_commands.describe(user="Die UserID oder der Nickname des Benutzers.", duration="Bann-Dauer in DD MM YYYY HH MM SS.", reason="Optional: Grund für den Bann.")
-    @is_authorized()
     async def temp_ban(self, interaction: discord.Interaction, user: str, duration: str, reason: str = "Kein Grund angegeben"):
         """Bannt einen Benutzer temporär."""
         member = await self.fetch_member(interaction.guild, user)
@@ -209,7 +207,6 @@ class Moderation(commands.Cog):
 
     @app_commands.command(name="unban", description="Entbannt einen Benutzer.")
     @app_commands.describe(user_id="Die UserID des Benutzers.")
-    @is_authorized()
     async def unban(self, interaction: discord.Interaction, user_id: int):
         """Entbannt einen Benutzer."""
         try:

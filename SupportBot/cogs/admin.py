@@ -41,7 +41,7 @@ class AdminCog(commands.Cog):
         with open(self.config_path, "w") as f:
             json.dump(self.config, f, indent=4)
 
-    def is_authorized(self):
+    def is_authorized(self, interaction: discord.Interaction) -> bool:
         """Check, ob der Benutzer eine Supportrolle oder ein Supportuser ist."""
 
         async def predicate(interaction: discord.Interaction):
@@ -135,7 +135,6 @@ class AdminCog(commands.Cog):
             print(f"[DEBUG] Kanal {channel.name} in Kategorie {category.name} verschoben.")
 
     @app_commands.command(name="setup_ticket", description="Richtet das Ticketsystem ein.")
-    @is_authorized()
     async def setup_ticket(self, interaction: discord.Interaction):
         """Richtet das Ticketsystem ein."""
         guild = interaction.guild
@@ -173,7 +172,6 @@ class AdminCog(commands.Cog):
 
     @app_commands.command(name="add_support_role", description="Fügt eine Supportrolle hinzu.")
     @app_commands.describe(role_id="Die ID der hinzuzufügenden Rolle.")
-    @is_authorized()
     async def add_support_role(self, interaction: discord.Interaction, role_id: int):
         """Fügt eine Supportrolle hinzu."""
         if role_id not in self.config["support_roles"]:
@@ -191,7 +189,6 @@ class AdminCog(commands.Cog):
 
     @app_commands.command(name="remove_support_role", description="Entfernt eine Supportrolle.")
     @app_commands.describe(role_id="Die ID der zu entfernenden Rolle.")
-    @is_authorized()
     async def remove_support_role(self, interaction: discord.Interaction, role_id: int):
         """Entfernt eine Supportrolle."""
         if role_id in self.config["support_roles"]:
@@ -209,7 +206,6 @@ class AdminCog(commands.Cog):
 
     @app_commands.command(name="add_support_user", description="Fügt einen Benutzer als Supporter hinzu.")
     @app_commands.describe(user_id="Die ID des hinzuzufügenden Benutzers.")
-    @is_authorized()
     async def add_support_user(self, interaction: discord.Interaction, user_id: int):
         """Fügt einen Benutzer als Supporter hinzu."""
         if user_id not in self.config["support_users"]:
@@ -227,7 +223,6 @@ class AdminCog(commands.Cog):
 
     @app_commands.command(name="remove_support_user", description="Entfernt einen Benutzer als Supporter.")
     @app_commands.describe(user_id="Die ID des zu entfernenden Benutzers.")
-    @is_authorized()
     async def remove_support_user(self, interaction: discord.Interaction, user_id: int):
         """Entfernt einen Benutzer als Supporter."""
         if user_id in self.config["support_users"]:
@@ -245,7 +240,6 @@ class AdminCog(commands.Cog):
 
     @app_commands.command(name="set_support_channel", description="Legt den Kanal für Support-Threads fest.")
     @app_commands.describe(channel_id="Die ID des Support-Kanals.")
-    @is_authorized()
     async def set_support_channel(self, interaction: discord.Interaction, channel_id: int):
         """Legt den Kanal für Support-Threads fest."""
         self.config["support_channel_id"] = channel_id
@@ -256,7 +250,6 @@ class AdminCog(commands.Cog):
         )
 
     @app_commands.command(name="list_support_config", description="Listet die aktuelle Support-Konfiguration auf.")
-    @is_authorized()
     async def list_support_config(self, interaction: discord.Interaction):
         """Listet die aktuelle Support-Konfiguration auf."""
         support_roles = "\n".join(map(str, self.config["support_roles"])) or "Keine Rollen konfiguriert."
@@ -293,7 +286,6 @@ class AdminCog(commands.Cog):
     @app_commands.command(name="claim_ticket",
                           description="Beansprucht ein Ticket und verschiebt es in die Übernommen-Kategorie.")
     @app_commands.describe(ticket_id="Die ID des Tickets, das beansprucht werden soll.")
-    @is_authorized()
     async def claim_ticket(self, interaction: discord.Interaction, ticket_id: int):
         """Beansprucht ein Ticket."""
         ticket = self.fetch_ticket(ticket_id)
@@ -310,7 +302,6 @@ class AdminCog(commands.Cog):
     @app_commands.command(name="release_ticket",
                           description="Gibt ein beanspruchtes Ticket frei und verschiebt es in die Freigegeben-Kategorie.")
     @app_commands.describe(ticket_id="Die ID des Tickets, das freigegeben werden soll.")
-    @is_authorized()
     async def release_ticket(self, interaction: discord.Interaction, ticket_id: int):
         """Gibt ein Ticket frei."""
         ticket = self.fetch_ticket(ticket_id)
@@ -327,7 +318,6 @@ class AdminCog(commands.Cog):
     @app_commands.command(name="close_ticket",
                           description="Schließt ein Ticket und verschiebt es in die Geschlossen-Kategorie.")
     @app_commands.describe(ticket_id="Die ID des Tickets, das geschlossen werden soll.")
-    @is_authorized()
     async def close_ticket(self, interaction: discord.Interaction, ticket_id: int):
         """Schließt ein Ticket."""
         ticket = self.fetch_ticket(ticket_id)
@@ -343,7 +333,6 @@ class AdminCog(commands.Cog):
 
     @app_commands.command(name="ticket_list", description="Listet alle Tickets eines bestimmten Status auf.")
     @app_commands.describe(status="Der Status der Tickets: open, claimed, released, closed.")
-    @is_authorized()
     async def ticket_list(self, interaction: discord.Interaction, status: str):
         """Listet alle Tickets mit einem bestimmten Status auf."""
         valid_statuses = ["open", "claimed", "released", "closed"]
