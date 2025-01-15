@@ -1,3 +1,5 @@
+import asyncio
+
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -107,20 +109,12 @@ class SetEmbed(commands.Cog):
         modal = EmbedModal(self.bot, self.db_connection, channel)
         await interaction.response.send_modal(modal)
 
-    @app_commands.command(name="editembed", description="Bearbeitet ein bestehendes Embed basierend auf der Nachricht-ID.")
+    @app_commands.command(name="editembed",
+                          description="Bearbeitet ein bestehendes Embed basierend auf der Nachricht-ID.")
     @app_commands.describe(message_id="Die ID der Nachricht, die bearbeitet werden soll.")
     async def edit_embed(self, interaction: discord.Interaction, message_id: str):
-        """Bearbeitet ein bestehendes Embed basierend auf der Nachricht-ID."""
-        await interaction.response.defer(ephemeral=True)  # Verhindert Zeitüberschreitung
-
-        if not await self.is_authorized(interaction):
-            return
-
-        if not self.db_connection:
-            await interaction.followup.send("❌ Datenbankverbindung nicht verfügbar.", ephemeral=True)
-            return
-
-        # Datenbankabfrage
+        """Bearbeitet ein bestehendes Embed."""
+        # Datenbankprüfung
         try:
             cursor = self.db_connection.cursor(dictionary=True)
             query = "SELECT * FROM embeds WHERE message_id = %s"
@@ -129,38 +123,32 @@ class SetEmbed(commands.Cog):
             cursor.close()
 
             if not embed_data:
-                await interaction.followup.send(
-                    f"❌ Keine Embed-Daten für die Nachricht mit ID {message_id} gefunden.",
-                    ephemeral=True
+                await interaction.response.send_message(
+                    f"❌ Keine Embed-Daten für Nachricht-ID {message_id}.", ephemeral=True
                 )
                 return
         except mysql.connector.Error as e:
-            await interaction.followup.send(f"❌ Fehler bei der Datenbankabfrage: {e}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Fehler bei Datenbankzugriff: {e}", ephemeral=True)
             return
 
-        # Nachricht und Kanal abrufen
+        # Kanal und Nachricht abrufen
         try:
             channel = self.bot.get_channel(int(embed_data["channel_id"]))
             if not channel:
-                await interaction.followup.send(f"❌ Kanal mit ID {embed_data['channel_id']} nicht gefunden.",
-                                                ephemeral=True)
-                return
+                raise ValueError("Kanal nicht gefunden.")
 
             message = await channel.fetch_message(int(message_id))
-        except discord.NotFound:
-            await interaction.followup.send(f"❌ Nachricht mit ID {message_id} nicht gefunden.", ephemeral=True)
-            return
-        except discord.Forbidden:
-            await interaction.followup.send("❌ Keine Berechtigung, die Nachricht abzurufen.", ephemeral=True)
-            return
         except Exception as e:
-            await interaction.followup.send(f"❌ Ein Fehler ist aufgetreten: {e}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Fehler beim Abrufen: {e}", ephemeral=True)
             return
 
-        # Modal anzeigen
-        modal = EditEmbedModal(self.bot, self.db_connection, message, embed_data)
-        await interaction.followup.send("✅ Modal wird geöffnet...", ephemeral=True)
-        await interaction.response.send_modal(modal)
+        # Modal öffnen
+        try:
+            modal = EditEmbedModal(self.bot, self.db_connection, message, embed_data)
+            await interaction.response.send_modal(modal)
+        except Exception as e:
+            print(f"[ERROR] Fehler beim Öffnen des Modals: {e}")
+            await interaction.response.send_message("❌ Fehler beim Öffnen des Modals.", ephemeral=True)
 
 
 class EmbedModal(discord.ui.Modal):
@@ -189,6 +177,11 @@ class EmbedModal(discord.ui.Modal):
         self.add_item(discord.ui.TextInput(
             label="Bild-URL",
             placeholder="URL zu einem Bild für das Embed (Optional)",
+            required=False
+        ))
+        self.add_item(discord.ui.TextInput(
+            label="Embed-Footer",
+            placeholder="Footer des Embeds)",
             required=False
         ))
 
@@ -233,44 +226,64 @@ class EmbedModal(discord.ui.Modal):
             await interaction.response.send_message("❌ Fehler beim Speichern des Embeds.", ephemeral=True)
 
 class EditEmbedModal(discord.ui.Modal):
-    def __init__(self, bot: commands.Bot, db_connection, message: discord.Message, embed_data):
-        super().__init__(title="Embed Bearbeiten")
+    def __init__(self, bot: commands.Bot, db_connection, message, embed_data):
+        super().__init__(title="Embed bearbeiten")
         self.bot = bot
         self.db_connection = db_connection
         self.message = message
         self.embed_data = embed_data
 
-        # Felder mit vorhandenen Daten vorausfüllen
-        self.add_item(discord.ui.TextInput(
+        # Titel
+        self.title_input = discord.ui.TextInput(
             label="Titel",
-            value=embed_data["title"],
+            placeholder="Titel des Embeds",
             max_length=256
-        ))
-        self.add_item(discord.ui.TextInput(
+        )
+        self.title_input.default = embed_data.get("title", "")  # Setze Standardwert
+        self.add_item(self.title_input)
+
+        # Beschreibung
+        self.description_input = discord.ui.TextInput(
             label="Beschreibung",
-            value=embed_data["description"],
+            placeholder="Beschreibung des Embeds",
             style=discord.TextStyle.paragraph,
             max_length=2048
-        ))
-        self.add_item(discord.ui.TextInput(
+        )
+        self.description_input.default = embed_data.get("description", "")  # Setze Standardwert
+        self.add_item(self.description_input)
+
+        # Farbe
+        self.color_input = discord.ui.TextInput(
             label="Farbe (Hex-Wert, z. B. #3498db)",
             placeholder="Lass das leer für die Standardfarbe",
-            required=False,
-            value=embed_data["color"]
-        ))
-        self.add_item(discord.ui.TextInput(
+            required=False
+        )
+        self.color_input.default = embed_data.get("color", "")  # Setze Standardwert
+        self.add_item(self.color_input)
+
+        # Bild-URL
+        self.image_input = discord.ui.TextInput(
             label="Bild-URL",
             placeholder="URL zu einem Bild für das Embed (Optional)",
-            required=False,
-            value=embed_data["image_url"]
-        ))
+            required=False
+        )
+        self.image_input.default = embed_data.get("image_url", "")  # Setze Standardwert
+        self.add_item(self.image_input)
+
+        self.footer_input = discord.ui.TextInput(
+            label="Embed-Footer",
+            placeholder="F",
+            max_length=256
+        )
+        self.title_input.default = embed_data.get("title", "")  # Setze Standardwert
+        self.add_item(self.title_input)
 
     async def on_submit(self, interaction: discord.Interaction):
-        """Aktualisiert das Embed basierend auf Benutzereingaben."""
-        title = self.children[0].value
-        description = self.children[1].value
-        color_input = self.children[2].value
-        image_url = self.children[3].value
+        """Bearbeitet das Embed basierend auf den Benutzereingaben."""
+        title = self.title_input.value
+        description = self.description_input.value
+        color_input = self.color_input.value
+        image_url = self.image_input.value
 
         # Farbe verarbeiten
         color = discord.Color.blue()
@@ -281,34 +294,34 @@ class EditEmbedModal(discord.ui.Modal):
                 await interaction.response.send_message("❌ Ungültiger Hex-Wert für die Farbe.", ephemeral=True)
                 return
 
+        # Aktualisiertes Embed erstellen
         embed = discord.Embed(
             title=title,
             description=description,
             color=color
         )
-
         if image_url:
             embed.set_image(url=image_url)
 
+        # Nachricht bearbeiten
         try:
-            # Nachricht bearbeiten
             await self.message.edit(embed=embed)
 
-            # Datenbank aktualisieren
+            # Änderungen in der Datenbank speichern
             cursor = self.db_connection.cursor()
             query = """
             UPDATE embeds
             SET title = %s, description = %s, color = %s, image_url = %s
             WHERE message_id = %s
             """
-            cursor.execute(query, (title, description, str(color), image_url, self.message.id))
+            cursor.execute(query, (title, description, str(color), image_url, str(self.message.id)))
             self.db_connection.commit()
             cursor.close()
 
-            await interaction.response.send_message("✅ Embed wurde erfolgreich bearbeitet.", ephemeral=True)
+            await interaction.response.send_message(f"✅ Embed erfolgreich bearbeitet (Nachricht-ID: {self.message.id}).", ephemeral=True)
         except Exception as e:
             print(f"[ERROR] Fehler beim Bearbeiten des Embeds: {e}")
-            await interaction.response.send_message("❌ Ein Fehler ist aufgetreten. Bitte versuche es später erneut.", ephemeral=True)
+            await interaction.response.send_message("❌ Fehler beim Bearbeiten des Embeds.", ephemeral=True)
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(SetEmbed(bot))
