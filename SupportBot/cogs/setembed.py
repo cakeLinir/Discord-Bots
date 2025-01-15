@@ -1,16 +1,44 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
+import mysql.connector
+import json
+import os
+
 
 class SetEmbed(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self.db_connection = self.connect_to_database()
+
+    def load_database_config(self):
+        """Lädt die Datenbankkonfiguration aus der spezifischen `database_config.json`."""
+        config_path = os.path.join(os.path.dirname(__file__), "../database_config.json")
+        if not os.path.exists(config_path):
+            raise FileNotFoundError(f"❌ Konfigurationsdatei nicht gefunden: {config_path}")
+        with open(config_path, "r") as file:
+            return json.load(file)
+
+    def connect_to_database(self):
+        """Stellt die Verbindung zur MySQL-Datenbank her."""
+        try:
+            config = self.load_database_config()
+            connection = mysql.connector.connect(
+                host=config["host"],
+                user=config["user"],
+                password=config["password"],
+                database=config["database"]
+            )
+            print("✅ Verbindung zur MySQL-Datenbank erfolgreich!")
+            return connection
+        except mysql.connector.Error as e:
+            print(f"❌ Fehler bei der MySQL-Verbindung: {e}")
+            return None
 
     @app_commands.command(name="setembed", description="Erstellt ein benutzerdefiniertes Embed.")
     async def set_embed(self, interaction: discord.Interaction):
         """Erstellt ein benutzerdefiniertes Embed basierend auf den Benutzereingaben."""
-        # Beispiel für eine Vorlage
-        modal = EmbedModal(self.bot)
+        modal = EmbedModal(self.bot, self.db_connection)
         await interaction.response.send_modal(modal)
 
     @app_commands.command(name="affiliate_embed", description="Erstellt ein Embed mit einem Affiliate-Link und Bild.")
@@ -26,9 +54,10 @@ class SetEmbed(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
 class EmbedModal(discord.ui.Modal):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot, db_connection):
         super().__init__(title="Embed-Einstellungen")
         self.bot = bot
+        self.db_connection = db_connection
 
         # Titel-Eingabe
         self.add_item(discord.ui.TextInput(
@@ -66,7 +95,6 @@ class EmbedModal(discord.ui.Modal):
         color_input = self.children[2].value
         image_url = self.children[3].value
 
-        # Standardfarbe verwenden, wenn keine Farbe angegeben wurde
         color = discord.Color.blue()  # Standardfarbe
         if color_input:
             try:
@@ -81,12 +109,27 @@ class EmbedModal(discord.ui.Modal):
             color=color
         )
 
-        # Optional: Bild hinzufügen
         if image_url:
             embed.set_image(url=image_url)
 
         # Embed senden
-        await interaction.response.send_message(embed=embed, ephemeral=False)
+        message = await interaction.channel.send(embed=embed)
+
+        # Embed in der Datenbank speichern
+        try:
+            cursor = self.db_connection.cursor()
+            query = """
+            INSERT INTO embeds (message_id, channel_id, guild_id, title, description, color, image_url)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(query, (message.id, interaction.channel.id, interaction.guild.id, title, description, str(color), image_url))
+            self.db_connection.commit()
+            cursor.close()
+            await interaction.response.send_message(f"Embed wurde erfolgreich gesendet und gespeichert (Nachricht-ID: {message.id}).", ephemeral=True)
+        except mysql.connector.Error as e:
+            print(f"[ERROR] Fehler beim Speichern des Embeds in der Datenbank: {e}")
+            await interaction.response.send_message("Ein Fehler ist aufgetreten. Das Embed konnte nicht gespeichert werden.", ephemeral=True)
+
 
 
 async def setup(bot: commands.Bot):
