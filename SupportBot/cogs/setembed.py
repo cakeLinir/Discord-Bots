@@ -10,6 +10,7 @@ class SetEmbed(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.db_connection = self.connect_to_database()
+        self.initialize_database()
 
     def load_database_config(self):
         """Lädt die Datenbankkonfiguration aus der spezifischen `database_config.json`."""
@@ -35,9 +36,38 @@ class SetEmbed(commands.Cog):
             print(f"❌ Fehler bei der MySQL-Verbindung: {e}")
             return None
 
+    def initialize_database(self):
+        """Erstellt die Tabelle für Embeds, falls sie nicht existiert."""
+        if self.db_connection:
+            try:
+                cursor = self.db_connection.cursor()
+                query = """
+                CREATE TABLE IF NOT EXISTS embeds (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    message_id BIGINT NOT NULL,
+                    channel_id BIGINT NOT NULL,
+                    guild_id BIGINT NOT NULL,
+                    title VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    color VARCHAR(7),
+                    image_url TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+                cursor.execute(query)
+                self.db_connection.commit()
+                cursor.close()
+                print("✅ Tabelle 'embeds' erfolgreich initialisiert.")
+            except mysql.connector.Error as e:
+                print(f"❌ Fehler bei der Initialisierung der Tabelle 'embeds': {e}")
+
     @app_commands.command(name="setembed", description="Erstellt ein benutzerdefiniertes Embed.")
     async def set_embed(self, interaction: discord.Interaction):
         """Erstellt ein benutzerdefiniertes Embed basierend auf den Benutzereingaben."""
+        if not self.db_connection:
+            await interaction.response.send_message("❌ Datenbankverbindung nicht verfügbar.", ephemeral=True)
+            return
+
         modal = EmbedModal(self.bot, self.db_connection)
         await interaction.response.send_modal(modal)
 
@@ -52,6 +82,7 @@ class SetEmbed(commands.Cog):
         embed.set_image(url="https://zap-hosting.com/interface/download/images.php?type=affiliate&id=408992")
         embed.set_footer(text="Unterstütze uns durch die Nutzung des Links!")
         await interaction.response.send_message(embed=embed)
+
 
 class EmbedModal(discord.ui.Modal):
     def __init__(self, bot: commands.Bot, db_connection):
@@ -95,12 +126,13 @@ class EmbedModal(discord.ui.Modal):
         color_input = self.children[2].value
         image_url = self.children[3].value
 
-        color = discord.Color.blue()  # Standardfarbe
+        # Standardfarbe verwenden
+        color = discord.Color.blue()
         if color_input:
             try:
                 color = discord.Color(int(color_input.lstrip("#"), 16))
             except ValueError:
-                await interaction.response.send_message("Ungültiger Hex-Wert für die Farbe.", ephemeral=True)
+                await interaction.response.send_message("❌ Ungültiger Hex-Wert für die Farbe.", ephemeral=True)
                 return
 
         embed = discord.Embed(
@@ -125,11 +157,10 @@ class EmbedModal(discord.ui.Modal):
             cursor.execute(query, (message.id, interaction.channel.id, interaction.guild.id, title, description, str(color), image_url))
             self.db_connection.commit()
             cursor.close()
-            await interaction.response.send_message(f"Embed wurde erfolgreich gesendet und gespeichert (Nachricht-ID: {message.id}).", ephemeral=True)
+            await interaction.response.send_message(f"✅ Embed wurde erfolgreich gesendet und gespeichert (Nachricht-ID: {message.id}).", ephemeral=True)
         except mysql.connector.Error as e:
             print(f"[ERROR] Fehler beim Speichern des Embeds in der Datenbank: {e}")
-            await interaction.response.send_message("Ein Fehler ist aufgetreten. Das Embed konnte nicht gespeichert werden.", ephemeral=True)
-
+            await interaction.response.send_message("❌ Ein Fehler ist aufgetreten. Das Embed konnte nicht gespeichert werden.", ephemeral=True)
 
 
 async def setup(bot: commands.Bot):
