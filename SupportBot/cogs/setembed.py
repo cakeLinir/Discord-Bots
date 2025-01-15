@@ -13,6 +13,17 @@ class SetEmbed(commands.Cog):
         modal = EmbedModal(self.bot)
         await interaction.response.send_modal(modal)
 
+    @app_commands.command(name="affiliate_embed", description="Erstellt ein Embed mit einem Affiliate-Link und Bild.")
+    async def affiliate_embed(self, interaction: discord.Interaction):
+        """Erstellt ein Embed mit einem Bild und einem Affiliate-Link."""
+        embed = discord.Embed(
+            title="ZAP-Hosting Gameserver and Webhosting",
+            description="[Klicke hier, um ZAP-Hosting zu besuchen](https://zap-hosting.com/hundekuchen)",
+            color=0x3498db
+        )
+        embed.set_image(url="https://zap-hosting.com/interface/download/images.php?type=affiliate&id=408992")
+        embed.set_footer(text="Unterstütze uns durch die Nutzung des Links!")
+        await interaction.response.send_message(embed=embed)
 
 class EmbedModal(discord.ui.Modal):
     def __init__(self, bot: commands.Bot):
