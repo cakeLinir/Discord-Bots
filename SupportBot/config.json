@@ -10,10 +10,11 @@
     "db_user": "root",
     "db_password": "Hundekuchen_2001",
     "db_name": "support_bot",
-    "menu_id": 1328347739221655573,
-    "erstellte_id": 1328347740643790880,
-    "uebernommen_id": 1328347742195421205,
-    "freigegeben_id": 1328347743890046980,
-    "geschlossen_id": 1328347745504858235,
-    "menu_channel_id": 1328353340337164351
+    "categories": {
+        "menu": 1329036731525238835,
+        "erstellte": 1329036732527808592,
+        "uebernommen": 1329036734008131627,
+        "freigegeben": 1329036735308632126,
+        "geschlossen": 1329036736218660885
+    }
 }

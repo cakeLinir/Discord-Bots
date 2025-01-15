@@ -7,29 +7,6 @@ from discord.ext import commands
 from discord import app_commands
 
 
-def is_authorized():
-    """Check, ob der Benutzer eine Supportrolle oder ein Supportuser ist."""
-    async def predicate(interaction: discord.Interaction):
-        cog = interaction.client.get_cog("AdminCog")
-        if not cog:
-            return False
-
-        # Überprüfen der Rollen
-        if interaction.user.id in cog.config.get("support_users", []):
-            return True
-        if any(role.id in cog.config.get("support_roles", []) for role in interaction.user.roles):
-            return True
-
-        # Wenn keine Berechtigung, Fehler werfen
-        await interaction.response.send_message(
-            "❌ Du hast keine Berechtigung, diesen Befehl auszuführen.",
-            ephemeral=True
-        )
-        return False
-
-    return app_commands.check(predicate)
-
-
 class AdminCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -63,6 +40,29 @@ class AdminCog(commands.Cog):
         """Speichert die Konfiguration."""
         with open(self.config_path, "w") as f:
             json.dump(self.config, f, indent=4)
+
+    def is_authorized(self):
+        """Check, ob der Benutzer eine Supportrolle oder ein Supportuser ist."""
+
+        async def predicate(interaction: discord.Interaction):
+            cog = interaction.client.get_cog("AdminCog")
+            if not cog:
+                return False
+
+            # Überprüfen der Rollen
+            if interaction.user.id in cog.config.get("support_users", []):
+                return True
+            if any(role.id in cog.config.get("support_roles", []) for role in interaction.user.roles):
+                return True
+
+            # Wenn keine Berechtigung, Fehler werfen
+            await interaction.response.send_message(
+                "❌ Du hast keine Berechtigung, diesen Befehl auszuführen.",
+                ephemeral=True
+            )
+            return False
+
+        return app_commands.check(predicate)
 
     def connect_to_database(self):
         """Stellt eine Verbindung zur MySQL-Datenbank her."""

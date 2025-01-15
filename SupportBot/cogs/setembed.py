@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
+from mysql.connector import Error
 import mysql.connector
 import json
 import os
@@ -9,32 +10,61 @@ import os
 class SetEmbed(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self.config = self.load_config()
         self.db_connection = self.connect_to_database()
         self.initialize_database()
 
-    def load_database_config(self):
-        """Lädt die Datenbankkonfiguration aus der spezifischen `database_config.json`."""
-        config_path = os.path.join(os.path.dirname(__file__), "../database_config.json")
+    def load_config(self):
+        """Lädt die Konfigurationsdatei."""
+        config_path = os.path.join(os.path.dirname(__file__), "../config.json")
         if not os.path.exists(config_path):
             raise FileNotFoundError(f"❌ Konfigurationsdatei nicht gefunden: {config_path}")
         with open(config_path, "r") as file:
             return json.load(file)
 
+    def save_config(self):
+        """Speichert die Konfiguration."""
+        config_path = os.path.join(os.path.dirname(__file__), "../config.json")
+        with open(config_path, "w") as file:
+            json.dump(self.config, file, indent=4)
+
+    def is_authorized(self):
+        """Check, ob der Benutzer eine Supportrolle oder ein Supportuser ist."""
+
+        async def predicate(interaction: discord.Interaction):
+            cog = interaction.client.get_cog("SetEmbedCog")
+            if not cog:
+                return False
+
+            # Überprüfen der Rollen
+            if interaction.user.id in cog.config.get("support_users", []):
+                return True
+            if any(role.id in cog.config.get("support_roles", []) for role in interaction.user.roles):
+                return True
+
+            # Wenn keine Berechtigung, Fehler werfen
+            await interaction.response.send_message(
+                "❌ Du hast keine Berechtigung, diesen Befehl auszuführen.",
+                ephemeral=True
+            )
+            return False
+
+        return app_commands.check(predicate)
+
     def connect_to_database(self):
-        """Stellt die Verbindung zur MySQL-Datenbank her."""
+        """Stellt eine Verbindung zur MySQL-Datenbank her."""
         try:
-            config = self.load_database_config()
             connection = mysql.connector.connect(
-                host=config["host"],
-                user=config["user"],
-                password=config["password"],
-                database=config["database"]
+                host=self.config["db_host"],
+                user=self.config["db_user"],
+                password=self.config["db_password"],
+                database=self.config["db_name"],
             )
             print("✅ Verbindung zur MySQL-Datenbank erfolgreich!")
             return connection
-        except mysql.connector.Error as e:
-            print(f"❌ Fehler bei der MySQL-Verbindung: {e}")
-            return None
+        except Error as err:
+            print(f"❌ Fehler bei der MySQL-Verbindung: {err}")
+            raise
 
     def initialize_database(self):
         """Erstellt die Tabelle für Embeds, falls sie nicht existiert."""
