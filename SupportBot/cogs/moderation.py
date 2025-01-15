@@ -32,28 +32,30 @@ class Moderation(commands.Cog):
         with open(config_path, "w") as file:
             json.dump(self.config, file, indent=4)
 
-    def is_authorized(self, interaction: discord.Interaction) -> bool:
-        """Check, ob der Benutzer eine Supportrolle oder ein Supportuser ist."""
+    async def is_authorized(self, interaction: discord.Interaction) -> bool:
+        """Prüft, ob der Benutzer berechtigt ist."""
+        support_users = self.config.get("support_users", [])
+        support_roles = self.config.get("support_roles", [])
 
-        async def predicate(interaction: discord.Interaction):
-            cog = interaction.client.get_cog("ModerationCog")
-            if not cog:
-                return False
+        # Debug-Ausgabe zur Überprüfung der Konfiguration
+        print(f"[DEBUG] support_users: {support_users}")
+        print(f"[DEBUG] support_roles: {support_roles}")
 
-            # Überprüfen der Rollen
-            if interaction.user.id in cog.config.get("support_users", []):
-                return True
-            if any(role.id in cog.config.get("support_roles", []) for role in interaction.user.roles):
-                return True
+        if interaction.user.id in support_users:
+            print(f"[DEBUG] Benutzer {interaction.user.id} ist autorisiert als Support-User.")
+            return True
 
-            # Wenn keine Berechtigung, Fehler werfen
-            await interaction.response.send_message(
-                "❌ Du hast keine Berechtigung, diesen Befehl auszuführen.",
-                ephemeral=True
-            )
-            return False
+        user_roles = [role.id for role in interaction.user.roles]
+        if any(role_id in support_roles for role_id in user_roles):
+            print(f"[DEBUG] Benutzer {interaction.user.id} ist autorisiert basierend auf Rollen.")
+            return True
 
-        return app_commands.check(predicate)
+        await interaction.response.send_message(
+            "❌ Du hast keine Berechtigung, diesen Befehl auszuführen.",
+            ephemeral=True
+        )
+        print(f"[DEBUG] Benutzer {interaction.user.id} ist nicht autorisiert.")
+        return False
 
     def connect_to_database(self):
         """Stellt eine Verbindung zur MySQL-Datenbank her."""
