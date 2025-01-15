@@ -254,111 +254,46 @@ class AdminCog(commands.Cog):
     @app_commands.command(name="list_support_config", description="Listet die aktuelle Support-Konfiguration auf.")
     async def list_support_config(self, interaction: discord.Interaction):
         """Listet die aktuelle Support-Konfiguration auf."""
-        support_roles = "\n".join(map(str, self.config["support_roles"])) or "Keine Rollen konfiguriert."
-        support_users = "\n".join(map(str, self.config["support_users"])) or "Keine Benutzer konfiguriert."
-        support_channel = self.config["support_channel_id"] or "Kein Kanal konfiguriert."
 
+        # Rollen auflösen
+        guild = interaction.guild
+        resolved_roles = []
+        for role_id in self.config.get("support_roles", []):
+            role = guild.get_role(int(role_id))
+            if role:
+                resolved_roles.append(f"@{role.name} <@&{role.id}> {role.id}")
+            else:
+                resolved_roles.append(f"Unbekannte Rolle mit ID {role_id}")
+
+        # Benutzer auflösen
+        resolved_users = []
+        for user_id in self.config.get("support_users", []):
+            try:
+                user = await self.bot.fetch_user(int(user_id))
+                resolved_users.append(f"@{user.name}#{user.discriminator} <@{user.id}> {user.id}")
+            except discord.NotFound:
+                resolved_users.append(f"Unbekannter Benutzer mit ID {user_id}")
+
+        # Support-Kanal auflösen
+        support_channel_id = self.config.get("support_channel_id")
+        support_channel = guild.get_channel(int(support_channel_id)) if support_channel_id else None
+        resolved_channel = (
+            f"#{support_channel.name} <#{support_channel.id}> {support_channel.id}"
+            if support_channel
+            else "Kein Kanal konfiguriert."
+        )
+
+        # Embed erstellen
         embed = discord.Embed(
             title="Aktuelle Support-Konfiguration",
             color=0x3498db
         )
-        embed.add_field(name="Support-Rollen", value=support_roles, inline=False)
-        embed.add_field(name="Support-Benutzer", value=support_users, inline=False)
-        embed.add_field(name="Support-Kanal", value=support_channel, inline=False)
+        embed.add_field(name="Support-Rollen", value="\n".join(resolved_roles) or "Keine Rollen konfiguriert.",
+                        inline=False)
+        embed.add_field(name="Support-Benutzer", value="\n".join(resolved_users) or "Keine Benutzer konfiguriert.",
+                        inline=False)
+        embed.add_field(name="Support-Kanal", value=resolved_channel, inline=False)
 
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    @app_commands.command(name="setup_ticket", description="Richtet das Ticketsystem ein.")
-    async def setup_ticket(self, interaction: discord.Interaction):
-        """Richtet das Ticketsystem ein."""
-        guild = interaction.guild
-        try:
-            for name in self.categories.keys():
-                category = discord.utils.get(guild.categories, id=self.categories.get(name))
-                if not category:
-                    category = await guild.create_category(f"✉️ {name.capitalize()}")
-                    self.categories[name] = category.id
-                    print(f"[DEBUG] Kategorie erstellt: {name.capitalize()} (ID: {category.id})")
-            self.save_category_ids()
-            await interaction.response.send_message("Das Ticketsystem wurde eingerichtet.", ephemeral=True)
-        except Exception as e:
-            print(f"[ERROR] Fehler bei setup_ticket: {e}")
-            await interaction.response.send_message("❌ Ein Fehler ist aufgetreten.", ephemeral=True)
-
-    @app_commands.command(name="claim_ticket",
-                          description="Beansprucht ein Ticket und verschiebt es in die Übernommen-Kategorie.")
-    @app_commands.describe(ticket_id="Die ID des Tickets, das beansprucht werden soll.")
-    async def claim_ticket(self, interaction: discord.Interaction, ticket_id: int):
-        """Beansprucht ein Ticket."""
-        ticket = self.fetch_ticket(ticket_id)
-        if not ticket:
-            await interaction.response.send_message("❌ Ticket nicht gefunden.", ephemeral=True)
-            return
-
-        guild = interaction.guild
-        uebernommen_category_id = self.categories.get("uebernommen")
-        await self.move_ticket_to_category(guild, ticket["channel_id"], uebernommen_category_id)
-        self.update_ticket_status(ticket_id, "claimed")
-        await interaction.response.send_message(f"✅ Ticket {ticket_id} wurde beansprucht.", ephemeral=True)
-
-    @app_commands.command(name="release_ticket",
-                          description="Gibt ein beanspruchtes Ticket frei und verschiebt es in die Freigegeben-Kategorie.")
-    @app_commands.describe(ticket_id="Die ID des Tickets, das freigegeben werden soll.")
-    async def release_ticket(self, interaction: discord.Interaction, ticket_id: int):
-        """Gibt ein Ticket frei."""
-        ticket = self.fetch_ticket(ticket_id)
-        if not ticket:
-            await interaction.response.send_message("❌ Ticket nicht gefunden.", ephemeral=True)
-            return
-
-        guild = interaction.guild
-        freigegeben_category_id = self.categories.get("freigegeben")
-        await self.move_ticket_to_category(guild, ticket["channel_id"], freigegeben_category_id)
-        self.update_ticket_status(ticket_id, "released")
-        await interaction.response.send_message(f"✅ Ticket {ticket_id} wurde freigegeben.", ephemeral=True)
-
-    @app_commands.command(name="close_ticket",
-                          description="Schließt ein Ticket und verschiebt es in die Geschlossen-Kategorie.")
-    @app_commands.describe(ticket_id="Die ID des Tickets, das geschlossen werden soll.")
-    async def close_ticket(self, interaction: discord.Interaction, ticket_id: int):
-        """Schließt ein Ticket."""
-        ticket = self.fetch_ticket(ticket_id)
-        if not ticket:
-            await interaction.response.send_message("❌ Ticket nicht gefunden.", ephemeral=True)
-            return
-
-        guild = interaction.guild
-        geschlossen_category_id = self.categories.get("geschlossen")
-        await self.move_ticket_to_category(guild, ticket["channel_id"], geschlossen_category_id)
-        self.update_ticket_status(ticket_id, "closed")
-        await interaction.response.send_message(f"✅ Ticket {ticket_id} wurde geschlossen.", ephemeral=True)
-
-    @app_commands.command(name="ticket_list", description="Listet alle Tickets eines bestimmten Status auf.")
-    @app_commands.describe(status="Der Status der Tickets: open, claimed, released, closed.")
-    async def ticket_list(self, interaction: discord.Interaction, status: str):
-        """Listet alle Tickets mit einem bestimmten Status auf."""
-        valid_statuses = ["open", "claimed", "released", "closed"]
-        if status not in valid_statuses:
-            await interaction.response.send_message(f"❌ Ungültiger Status. Gültige Werte: {', '.join(valid_statuses)}",
-                                                    ephemeral=True)
-            return
-
-        tickets = self.fetch_tickets_by_status(status)
-        if not tickets:
-            await interaction.response.send_message(f"Keine Tickets mit dem Status '{status}' gefunden.",
-                                                    ephemeral=True)
-            return
-
-        embed = discord.Embed(
-            title=f"Tickets mit Status '{status}'",
-            color=0x3498db
-        )
-        for ticket in tickets:
-            embed.add_field(
-                name=f"Ticket ID: {ticket['id']}",
-                value=f"Channel: {ticket['channel_name']} | User ID: {ticket['user_id']}",
-                inline=False
-            )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 async def setup(bot):
