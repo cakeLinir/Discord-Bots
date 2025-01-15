@@ -111,14 +111,16 @@ class SetEmbed(commands.Cog):
     @app_commands.describe(message_id="Die ID der Nachricht, die bearbeitet werden soll.")
     async def edit_embed(self, interaction: discord.Interaction, message_id: str):
         """Bearbeitet ein bestehendes Embed basierend auf der Nachricht-ID."""
+        await interaction.response.defer(ephemeral=True)  # Verhindert Zeitüberschreitung
+
         if not await self.is_authorized(interaction):
             return
 
         if not self.db_connection:
-            await interaction.response.send_message("❌ Datenbankverbindung nicht verfügbar.", ephemeral=True)
+            await interaction.followup.send("❌ Datenbankverbindung nicht verfügbar.", ephemeral=True)
             return
 
-        # Überprüfen, ob die Nachricht-ID in der Datenbank existiert
+        # Datenbankabfrage
         try:
             cursor = self.db_connection.cursor(dictionary=True)
             query = "SELECT * FROM embeds WHERE message_id = %s"
@@ -127,38 +129,39 @@ class SetEmbed(commands.Cog):
             cursor.close()
 
             if not embed_data:
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     f"❌ Keine Embed-Daten für die Nachricht mit ID {message_id} gefunden.",
                     ephemeral=True
                 )
                 return
         except mysql.connector.Error as e:
-            print(f"[ERROR] Fehler beim Abrufen des Embeds aus der Datenbank: {e}")
-            await interaction.response.send_message("❌ Ein Fehler ist aufgetreten. Bitte versuche es später erneut.",
-                                                    ephemeral=True)
+            await interaction.followup.send(f"❌ Fehler bei der Datenbankabfrage: {e}", ephemeral=True)
             return
 
-        # Kanal und Nachricht abrufen
-        channel = self.bot.get_channel(int(embed_data["channel_id"]))
-        if not channel:
-            await interaction.response.send_message(
-                f"❌ Kanal mit ID {embed_data['channel_id']} nicht gefunden.",
-                ephemeral=True
-            )
-            return
-
+        # Nachricht und Kanal abrufen
         try:
+            channel = self.bot.get_channel(int(embed_data["channel_id"]))
+            if not channel:
+                await interaction.followup.send(f"❌ Kanal mit ID {embed_data['channel_id']} nicht gefunden.",
+                                                ephemeral=True)
+                return
+
             message = await channel.fetch_message(int(message_id))
         except discord.NotFound:
-            await interaction.response.send_message(
-                f"❌ Nachricht mit ID {message_id} nicht gefunden.",
-                ephemeral=True
-            )
+            await interaction.followup.send(f"❌ Nachricht mit ID {message_id} nicht gefunden.", ephemeral=True)
+            return
+        except discord.Forbidden:
+            await interaction.followup.send("❌ Keine Berechtigung, die Nachricht abzurufen.", ephemeral=True)
+            return
+        except Exception as e:
+            await interaction.followup.send(f"❌ Ein Fehler ist aufgetreten: {e}", ephemeral=True)
             return
 
-        # Modal zum Bearbeiten des Embeds anzeigen
+        # Modal anzeigen
         modal = EditEmbedModal(self.bot, self.db_connection, message, embed_data)
+        await interaction.followup.send("✅ Modal wird geöffnet...", ephemeral=True)
         await interaction.response.send_modal(modal)
+
 
 class EmbedModal(discord.ui.Modal):
     def __init__(self, bot: commands.Bot, db_connection, channel):
