@@ -76,9 +76,15 @@ class SetEmbed(commands.Cog):
 
     @app_commands.command(name="setembed", description="Erstellt ein benutzerdefiniertes Embed in einem Kanal.")
     @app_commands.describe(channel_id="Die ID des Kanals, in den das Embed gesendet werden soll.")
-    async def set_embed(self, interaction: discord.Interaction, channel_id: int):
+    async def set_embed(self, interaction: discord.Interaction, channel_id: str):
         """Erstellt ein benutzerdefiniertes Embed basierend auf den Benutzereingaben."""
         if not await self.is_authorized(interaction):
+            return
+
+        try:
+            channel_id = int(channel_id)
+        except ValueError:
+            await interaction.response.send_message(f"❌ `{channel_id}` ist keine gültige Kanal-ID.", ephemeral=True)
             return
 
         channel = self.bot.get_channel(channel_id)
