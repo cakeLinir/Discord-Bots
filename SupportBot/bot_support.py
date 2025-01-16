@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 # Lade die Umgebungsvariablen
 load_dotenv("../.env")
 
-
 def get_bot_token(bot_name):
     """Gibt den Bot-Token basierend auf dem Namen zurück."""
     token_key = f"DISCORD_TOKEN_{bot_name.upper()}"
@@ -16,7 +15,6 @@ def get_bot_token(bot_name):
     if not token:
         raise ValueError(f"Kein Token für den Bot '{bot_name}' gefunden. Überprüfe die .env-Datei.")
     return token
-
 
 # Bot-Name und Token abrufen
 BOT_NAME = "support"
@@ -42,7 +40,6 @@ intents.guilds = True
 intents.reactions = True
 bot = commands.Bot(command_prefix="!", intents=intents, application_id=int(config["application_id"]))
 
-
 # Event: Bot ist bereit
 @bot.event
 async def on_ready():
@@ -52,7 +49,6 @@ async def on_ready():
     print(f"✅ Bot ist bereit! Eingeloggt als {bot.user} (ID: {bot.user.id})")
     print(f"✅ Verbundene Server: {[guild.name for guild in bot.guilds]}")
     print(f"✅ Intents aktiviert: {bot.intents}")
-
 
 # Lade Cogs
 async def load_cogs():
@@ -73,18 +69,12 @@ async def load_cogs():
             except Exception as e:
                 print(f"❌ Fehler beim Laden des Cogs '{cog_name}': {e}")
 
-    
-
-
-
-
 # Main-Funktion
 async def main():
     async with bot:
         print("✅ Starte Bot...")
         await load_cogs()
         await bot.start(DISCORD_TOKEN)
-
 
 # Bot ausführen
 if __name__ == "__main__":

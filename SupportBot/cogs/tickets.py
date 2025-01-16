@@ -6,7 +6,6 @@ from discord.ui import Button, View
 import mysql.connector
 from mysql.connector import Error
 
-
 class Tickets(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -116,7 +115,7 @@ class Tickets(commands.Cog):
             cursor = self.db_connection.cursor()
             cursor.execute(query, tuple(params))
             self.db_connection.commit()
-            print(f"[DEBUG] Ticket {ticket_id} aktualisiert: {updates}")
+            print(f"[DEBUG] Ticket {ticket_id] aktualisiert: {updates}")
         except Error as e:
             print(f"[ERROR] Fehler bei update_ticket: {e}")
 
@@ -129,7 +128,6 @@ class Tickets(commands.Cog):
                 self.categories[name] = category.id
                 print(f"[DEBUG] Kategorie erstellt: {name.capitalize()} (ID: {category.id})")
         self.save_category_ids()
-
 
 class TicketView(View):
     def __init__(self, bot):
@@ -172,7 +170,6 @@ class TicketView(View):
         tickets_cog.update_ticket(ticket_id, channel_id=channel.id)
 
         await interaction.response.send_message(f"Ticket erstellt: {channel.mention}", ephemeral=True)
-
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Tickets(bot))
