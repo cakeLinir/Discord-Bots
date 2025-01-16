@@ -1,13 +1,11 @@
-import json
-import os
 import discord
 from discord.ext import commands
-from discord.ui import Button, View
 import mysql.connector
 from mysql.connector import Error
 
+
 class Tickets(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.config = self.load_config()
         self.categories = {
@@ -29,12 +27,6 @@ class Tickets(commands.Cog):
         with open(config_path, "r") as file:
             return json.load(file)
 
-    def save_config(self):
-        """Speichert die Konfiguration."""
-        config_path = os.path.join(os.path.dirname(__file__), "../config.json")
-        with open(config_path, "w") as file:
-            json.dump(self.config, file, indent=4)
-
     def connect_to_database(self):
         """Stellt eine Verbindung zur MySQL-Datenbank her."""
         try:
@@ -46,8 +38,8 @@ class Tickets(commands.Cog):
             )
             print("✅ Verbindung zur MySQL-Datenbank erfolgreich!")
             return connection
-        except Error as err:
-            print(f"❌ Fehler bei der MySQL-Verbindung: {err}")
+        except mysql.connector.Error as e:
+            print(f"❌ Fehler bei der MySQL-Verbindung: {e}")
             raise
 
     def initialize_database(self):
@@ -62,16 +54,18 @@ class Tickets(commands.Cog):
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """
-        cursor = self.db_connection.cursor()
-        cursor.execute(query)
-        self.db_connection.commit()
+        try:
+            cursor = self.db_connection.cursor()
+            cursor.execute(query)
+            self.db_connection.commit()
+            print("✅ Tabelle 'tickets_new' erfolgreich initialisiert.")
+        except mysql.connector.Error as e:
+            print(f"❌ Fehler bei der Initialisierung der Tabelle: {e}")
 
     def load_category_ids(self):
-        """Lädt gespeicherte Kategorien-IDs."""
-        for category in self.categories.keys():
-            category_id = self.config.get(f"{category}_id")
-            if category_id:
-                self.categories[category] = category_id
+        """Lädt gespeicherte Kategorien-IDs aus der Konfiguration."""
+        for category_name in self.categories.keys():
+            self.categories[category_name] = self.config.get(f"{category_name}_id")
 
     def save_category_ids(self):
         """Speichert die Kategorien-IDs in der Konfiguration."""
@@ -80,42 +74,35 @@ class Tickets(commands.Cog):
                 self.config[f"{name}_id"] = category_id
         self.save_config()
 
+    def save_config(self):
+        """Speichert die Konfigurationsdatei."""
+        config_path = os.path.join(os.path.dirname(__file__), "../config.json")
+        with open(config_path, "w") as file:
+            json.dump(self.config, file, indent=4)
+
     def create_ticket(self, user_id, category_id):
-        """Erstellt ein neues Ticket in der Datenbank und gibt die Ticket-ID zurück."""
+        """Erstellt ein neues Ticket in der Datenbank."""
         try:
             query = "INSERT INTO tickets_new (user_id, category_id) VALUES (%s, %s)"
             cursor = self.db_connection.cursor()
             cursor.execute(query, (user_id, category_id))
             self.db_connection.commit()
             return cursor.lastrowid
-        except Error as e:
+        except mysql.connector.Error as e:
             print(f"[ERROR] Fehler bei create_ticket: {e}")
             return None
 
-    def update_ticket(self, ticket_id, status=None, channel_id=None, category_id=None):
-        """Aktualisiert den Status oder die Kanal-/Kategorieinformationen eines Tickets."""
-        query = "UPDATE tickets_new SET "
-        updates = []
-        params = []
-
-        if status:
-            updates.append("status = %s")
-            params.append(status)
-        if channel_id:
-            updates.append("channel_id = %s")
-            params.append(channel_id)
-        if category_id:
-            updates.append("category_id = %s")
-            params.append(category_id)
-
-        query += ", ".join(updates) + " WHERE id = %s"
-        params.append(ticket_id)
-
+    def update_ticket(self, ticket_id, **kwargs):
+        """Aktualisiert ein Ticket in der Datenbank."""
         try:
+            updates = ", ".join([f"{key} = %s" for key in kwargs.keys()])
+            query = f"UPDATE tickets_new SET {updates} WHERE id = %s"
+            params = list(kwargs.values()) + [ticket_id]
+
             cursor = self.db_connection.cursor()
-            cursor.execute(query, tuple(params))
+            cursor.execute(query, params)
             self.db_connection.commit()
-            print(f"[DEBUG] Ticket {ticket_id] aktualisiert: {updates}")
+            print(f"[DEBUG] Ticket {ticket_id} aktualisiert: {updates}")
         except Error as e:
             print(f"[ERROR] Fehler bei update_ticket: {e}")
 
@@ -128,6 +115,7 @@ class Tickets(commands.Cog):
                 self.categories[name] = category.id
                 print(f"[DEBUG] Kategorie erstellt: {name.capitalize()} (ID: {category.id})")
         self.save_category_ids()
+
 
 class TicketView(View):
     def __init__(self, bot):
@@ -143,33 +131,114 @@ class TicketView(View):
             return
 
         guild = interaction.guild
-        user = interaction.user
+        categories_created = []
+        categories_existing = []
 
-        # Kategorie für erstellte Tickets abrufen
-        erstellte_category_id = tickets_cog.categories.get("erstellte")
-        erstellte_category = discord.utils.get(guild.categories, id=erstellte_category_id)
-        if not erstellte_category:
-            await interaction.response.send_message("Kategorie für Tickets nicht gefunden.", ephemeral=True)
-            return
+        try:
+            cursor = self.db_connection.cursor(dictionary=True)
 
-        # Ticket-ID erstellen
-        ticket_id = tickets_cog.create_ticket(user.id, erstellte_category.id)
-        if not ticket_id:
-            await interaction.response.send_message("Fehler beim Erstellen des Tickets.", ephemeral=True)
-            return
+            # Kategorien erstellen oder prüfen
+            for name, _ in self.categories.items():
+                query = "SELECT category_id FROM ticket_categories WHERE name = %s AND guild_id = %s"
+                cursor.execute(query, (name, guild.id))
+                category_data = cursor.fetchone()
 
-        # Kanal erstellen
-        channel_name = f"ticket-{str(ticket_id).zfill(3)}"
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-        }
-        channel = await guild.create_text_channel(name=channel_name, category=erstellte_category, overwrites=overwrites)
+                if not category_data:
+                    # Kategorie erstellen
+                    category = await guild.create_category(f"✉️ {name.capitalize()}")
+                    categories_created.append(f"✉️ {name.capitalize()}")
 
-        # Kanal-ID aktualisieren
-        tickets_cog.update_ticket(ticket_id, channel_id=channel.id)
+                    # In der Datenbank speichern
+                    query = "INSERT INTO ticket_categories (name, guild_id, category_id) VALUES (%s, %s, %s)"
+                    cursor.execute(query, (name, guild.id, category.id))
+                    self.db_connection.commit()
+                    self.categories[name] = category.id
+                    print(f"[DEBUG] Kategorie erstellt: {name.capitalize()} (ID: {category.id})")
+                else:
+                    # Kategorie existiert
+                    categories_existing.append(f"✉️ {name.capitalize()}")
+                    self.categories[name] = category_data["category_id"]
 
-        await interaction.response.send_message(f"Ticket erstellt: {channel.mention}", ephemeral=True)
+            # Menü-Channel erstellen oder prüfen
+            query = "SELECT channel_id FROM ticket_menu WHERE guild_id = %s"
+            cursor.execute(query, (guild.id,))
+            menu_data = cursor.fetchone()
+
+            if not menu_data:
+                # Menü-Channel erstellen
+                menu_category_id = self.categories.get("menu")
+                menu_category = discord.utils.get(guild.categories, id=menu_category_id)
+
+                if not menu_category:
+                    await interaction.response.send_message(
+                        "Fehler: Kategorie für Menü nicht gefunden. Kategorien müssen zuerst erstellt werden.",
+                        ephemeral=True,
+                    )
+                    return
+
+                # Erstelle den Channel in der Kategorie
+                menu_channel = await guild.create_text_channel("ticket-menu", category=menu_category)
+
+                # In der Datenbank speichern
+                query = "INSERT INTO ticket_menu (guild_id, channel_id) VALUES (%s, %s)"
+                cursor.execute(query, (guild.id, menu_channel.id))
+                self.db_connection.commit()
+                print(f"[DEBUG] Textkanal 'ticket-menu' erstellt (ID: {menu_channel.id}).")
+            else:
+                # Menü-Channel existiert
+                menu_channel = discord.utils.get(guild.text_channels, id=menu_data["channel_id"])
+                if not menu_channel:
+                    # Wenn der Kanal in der Datenbank existiert, aber auf dem Server fehlt, neu erstellen
+                    menu_category_id = self.categories.get("menu")
+                    menu_category = discord.utils.get(guild.categories, id=menu_category_id)
+
+                    menu_channel = await guild.create_text_channel("ticket-menu", category=menu_category)
+
+                    # Datenbank aktualisieren
+                    query = "UPDATE ticket_menu SET channel_id = %s WHERE guild_id = %s"
+                    cursor.execute(query, (menu_channel.id, guild.id))
+                    self.db_connection.commit()
+                    print(f"[DEBUG] Textkanal 'ticket-menu' wurde neu erstellt (ID: {menu_channel.id}).")
+
+            # Überprüfen, ob ein gültiges Embed existiert
+            async for message in menu_channel.history(limit=50):
+                if message.author == self.bot.user and message.embeds:
+                    embed = message.embeds[0]
+                    embed.title = "🎫 Ticket-Support"
+                    embed.description = (
+                        "Klicke auf den Button unten, um ein Ticket zu erstellen. "
+                        "Missbrauch wird mit Ausschluss geahndet!"
+                    )
+                    embed.color = discord.Color.blue()
+                    await message.edit(embed=embed, view=TicketView(self.bot))
+                    print("[DEBUG] Vorhandenes Embed aktualisiert.")
+                    await interaction.response.send_message(
+                        "Das Ticketsystem wurde eingerichtet.",
+                        ephemeral=True,
+                    )
+                    return
+
+            # Neues Embed erstellen
+            embed = discord.Embed(
+                title="🎫 Ticket-Support",
+                description="Klicke auf den Button unten, um ein Ticket zu erstellen. "
+                            "Missbrauch wird mit Ausschluss geahndet!",
+                color=discord.Color.blue(),
+            )
+            view = TicketView(self.bot)
+            await menu_channel.send(embed=embed, view=view)
+            print("[DEBUG] Neues Embed gepostet.")
+
+            await interaction.response.send_message(
+                f"Kategorien: {', '.join(categories_existing) if categories_existing else 'Keine'} existieren bereits.\n"
+                f"Kategorien: {', '.join(categories_created) if categories_created else 'Keine'} wurden erstellt.\n"
+                "Das Ticketsystem wurde erfolgreich eingerichtet.",
+                ephemeral=True,
+            )
+
+        except Exception as e:
+            print(f"[ERROR] Fehler bei setup_ticket: {e}")
+            await interaction.response.send_message("❌ Ein Fehler ist aufgetreten.", ephemeral=True)
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Tickets(bot))

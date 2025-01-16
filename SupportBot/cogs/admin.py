@@ -6,6 +6,7 @@ from mysql.connector import Error
 from discord.ext import commands
 from discord import app_commands
 
+
 def is_authorized():
     """Check, ob der Benutzer eine Supportrolle oder ein Supportuser ist."""
     async def predicate(interaction: discord.Interaction):
@@ -27,6 +28,7 @@ def is_authorized():
         return False
 
     return app_commands.check(predicate)
+
 
 class AdminCog(commands.Cog):
     def __init__(self, bot):
@@ -61,6 +63,31 @@ class AdminCog(commands.Cog):
         """Speichert die Konfiguration."""
         with open(self.config_path, "w") as f:
             json.dump(self.config, f, indent=4)
+
+    async def is_authorized(self, interaction: discord.Interaction) -> bool:
+        """Prüft, ob der Benutzer berechtigt ist."""
+        support_users = self.config.get("support_users", [])
+        support_roles = self.config.get("support_roles", [])
+
+        # Debug-Ausgabe zur Überprüfung der Konfiguration
+        print(f"[DEBUG] support_users: {support_users}")
+        print(f"[DEBUG] support_roles: {support_roles}")
+
+        if interaction.user.id in support_users:
+            print(f"[DEBUG] Benutzer {interaction.user.id} ist autorisiert als Support-User.")
+            return True
+
+        user_roles = [role.id for role in interaction.user.roles]
+        if any(role_id in support_roles for role_id in user_roles):
+            print(f"[DEBUG] Benutzer {interaction.user.id} ist autorisiert basierend auf Rollen.")
+            return True
+
+        await interaction.response.send_message(
+            "❌ Du hast keine Berechtigung, diesen Befehl auszuführen.",
+            ephemeral=True
+        )
+        print(f"[DEBUG] Benutzer {interaction.user.id} ist nicht autorisiert.")
+        return False
 
     def connect_to_database(self):
         """Stellt eine Verbindung zur MySQL-Datenbank her."""
@@ -133,7 +160,6 @@ class AdminCog(commands.Cog):
             print(f"[DEBUG] Kanal {channel.name} in Kategorie {category.name} verschoben.")
 
     @app_commands.command(name="setup_ticket", description="Richtet das Ticketsystem ein.")
-    @is_authorized()
     async def setup_ticket(self, interaction: discord.Interaction):
         """Richtet das Ticketsystem ein."""
         guild = interaction.guild
@@ -154,12 +180,6 @@ class AdminCog(commands.Cog):
     @app_commands.describe(role_id="Die ID der hinzuzufügenden Rolle (als String).")
     async def add_support_role(self, interaction: discord.Interaction, role_id: str):
         """Fügt eine Supportrolle hinzu."""
-        try:
-            role_id = int(role_id)  # Konvertiere zu int für die interne Verarbeitung
-        except ValueError:
-            await interaction.response.send_message("❌ Ungültige Rollen-ID. Bitte eine gültige Zahl eingeben.", ephemeral=True)
-            return
-
         if role_id not in self.config["support_roles"]:
             self.config["support_roles"].append(role_id)
             self.save_config()
@@ -177,12 +197,6 @@ class AdminCog(commands.Cog):
     @app_commands.describe(role_id="Die ID der zu entfernenden Rolle (als String).")
     async def remove_support_role(self, interaction: discord.Interaction, role_id: str):
         """Entfernt eine Supportrolle."""
-        try:
-            role_id = int(role_id)  # Konvertiere zu int
-        except ValueError:
-            await interaction.response.send_message("❌ Ungültige Rollen-ID. Bitte eine gültige Zahl eingeben.", ephemeral=True)
-            return
-
         if role_id in self.config["support_roles"]:
             self.config["support_roles"].remove(role_id)
             self.save_config()
@@ -200,12 +214,6 @@ class AdminCog(commands.Cog):
     @app_commands.describe(user_id="Die ID des hinzuzufügenden Benutzers (als String).")
     async def add_support_user(self, interaction: discord.Interaction, user_id: str):
         """Fügt einen Benutzer als Supporter hinzu."""
-        try:
-            user_id = int(user_id)  # Konvertiere zu int
-        except ValueError:
-            await interaction.response.send_message("❌ Ungültige Benutzer-ID. Bitte eine gültige Zahl eingeben.", ephemeral=True)
-            return
-
         if user_id not in self.config["support_users"]:
             self.config["support_users"].append(user_id)
             self.save_config()
@@ -223,12 +231,6 @@ class AdminCog(commands.Cog):
     @app_commands.describe(user_id="Die ID des zu entfernenden Benutzers (als String).")
     async def remove_support_user(self, interaction: discord.Interaction, user_id: str):
         """Entfernt einen Benutzer als Supporter."""
-        try:
-            user_id = int(user_id)  # Konvertiere zu int
-        except ValueError:
-            await interaction.response.send_message("❌ Ungültige Benutzer-ID. Bitte eine gültige Zahl eingeben.", ephemeral=True)
-            return
-
         if user_id in self.config["support_users"]:
             self.config["support_users"].remove(user_id)
             self.save_config()
@@ -246,12 +248,6 @@ class AdminCog(commands.Cog):
     @app_commands.describe(channel_id="Die ID des Support-Kanals (als String).")
     async def set_support_channel(self, interaction: discord.Interaction, channel_id: str):
         """Legt den Kanal für Support-Threads fest."""
-        try:
-            channel_id = int(channel_id)  # Konvertiere zu int
-        except ValueError:
-            await interaction.response.send_message("❌ Ungültige Kanal-ID. Bitte eine gültige Zahl eingeben.", ephemeral=True)
-            return
-
         self.config["support_channel_id"] = channel_id
         self.save_config()
         await interaction.response.send_message(
@@ -260,22 +256,66 @@ class AdminCog(commands.Cog):
         )
 
     @app_commands.command(name="list_support_config", description="Listet die aktuelle Support-Konfiguration auf.")
-    @is_authorized()
     async def list_support_config(self, interaction: discord.Interaction):
         """Listet die aktuelle Support-Konfiguration auf."""
-        support_roles = "\n".join(map(str, self.config["support_roles"])) or "Keine Rollen konfiguriert."
-        support_users = "\n".join(map(str, self.config["support_users"])) or "Keine Benutzer konfiguriert."
-        support_channel = self.config["support_channel_id"] or "Kein Kanal konfiguriert."
 
+        # Rollen auflösen
+        guild = interaction.guild
+        resolved_roles = []
+        for role_id in self.config.get("support_roles", []):
+            role = guild.get_role(int(role_id))
+            if role:
+                resolved_roles.append(f"@{role.name} <@&{role.id}> {role.id}")
+            else:
+                resolved_roles.append(f"Unbekannte Rolle mit ID {role_id}")
+
+        # Benutzer auflösen
+        resolved_users = []
+        for user_id in self.config.get("support_users", []):
+            try:
+                user = await self.bot.fetch_user(int(user_id))
+                resolved_users.append(f"@{user.name}#{user.discriminator} <@{user.id}> {user.id}")
+            except discord.NotFound:
+                resolved_users.append(f"Unbekannter Benutzer mit ID {user_id}")
+
+        # Support-Kanal auflösen
+        support_channel_id = self.config.get("support_channel_id")
+        support_channel = guild.get_channel(int(support_channel_id)) if support_channel_id else None
+        resolved_channel = (
+            f"#{support_channel.name} <#{support_channel.id}> {support_channel.id}"
+            if support_channel
+            else "Kein Kanal konfiguriert."
+        )
+
+        # Embed erstellen
         embed = discord.Embed(
             title="Aktuelle Support-Konfiguration",
             color=0x3498db
         )
-        embed.add_field(name="Support-Rollen", value=support_roles, inline=False)
-        embed.add_field(name="Support-Benutzer", value=support_users, inline=False)
-        embed.add_field(name="Support-Kanal", value=support_channel, inline=False)
+        embed.add_field(name="Support-Rollen", value="\n".join(resolved_roles) or "Keine Rollen konfiguriert.",
+                        inline=False)
+        embed.add_field(name="Support-Benutzer", value="\n".join(resolved_users) or "Keine Benutzer konfiguriert.",
+                        inline=False)
+        embed.add_field(name="Support-Kanal", value=resolved_channel, inline=False)
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(name="setup_ticket", description="Richtet das Ticketsystem ein.")
+    async def setup_ticket(self, interaction: discord.Interaction):
+        """Richtet das Ticketsystem ein."""
+        guild = interaction.guild
+        try:
+            for name in self.categories.keys():
+                category = discord.utils.get(guild.categories, id=self.categories.get(name))
+                if not category:
+                    category = await guild.create_category(f"✉️ {name.capitalize()}")
+                    self.categories[name] = category.id
+                    print(f"[DEBUG] Kategorie erstellt: {name.capitalize()} (ID: {category.id})")
+            self.save_category_ids()
+            await interaction.response.send_message("Das Ticketsystem wurde eingerichtet.", ephemeral=True)
+        except Exception as e:
+            print(f"[ERROR] Fehler bei setup_ticket: {e}")
+            await interaction.response.send_message("❌ Ein Fehler ist aufgetreten.", ephemeral=True)
 
     @app_commands.command(name="claim_ticket",
                           description="Beansprucht ein Ticket und verschiebt es in die Übernommen-Kategorie.")
@@ -315,14 +355,8 @@ class AdminCog(commands.Cog):
                           description="Schließt ein Ticket und verschiebt es in die Geschlossen-Kategorie.")
     @app_commands.describe(ticket_id="Die ID des Tickets, das geschlossen werden soll.")
     @is_authorized()
-    async def close_ticket(self, interaction: discord.Interaction, ticket_id: str):
+    async def close_ticket(self, interaction: discord.Interaction, ticket_id: int):
         """Schließt ein Ticket."""
-        try:
-            ticket_id = int(ticket_id)  # Konvertiere zu int
-        except ValueError:
-            await interaction.response.send_message("❌ Ungültige Ticket-ID. Bitte eine gültige Zahl eingeben.", ephemeral=True)
-            return
-
         ticket = self.fetch_ticket(ticket_id)
         if not ticket:
             await interaction.response.send_message("❌ Ticket nicht gefunden.", ephemeral=True)

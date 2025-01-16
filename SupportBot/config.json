@@ -1,7 +1,9 @@
 {
-    "support_roles": [],
+    "support_roles": [
+        1173419250053021697
+    ],
     "support_users": [
-        "333006296611684352"
+        333006296611684352
     ],
     "guild_id": "1171118476929269820",
     "application_id": "1318906036010356816",
@@ -10,10 +12,11 @@
     "db_user": "root",
     "db_password": "Hundekuchen_2001",
     "db_name": "support_bot",
-    "menu_id": 1328347739221655573,
-    "erstellte_id": 1328347740643790880,
-    "uebernommen_id": 1328347742195421205,
-    "freigegeben_id": 1328347743890046980,
-    "geschlossen_id": 1328347745504858235,
-    "menu_channel_id": 1328353340337164351
+    "categories": {
+        "menu": 1329148699191808172,
+        "erstellte": 1329148700315877376,
+        "uebernommen": 1329148701075050628,
+        "freigegeben": 1329148702408835123,
+        "geschlossen": 1329148704078168144
+    }
 }
