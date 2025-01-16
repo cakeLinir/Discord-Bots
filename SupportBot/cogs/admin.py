@@ -173,9 +173,10 @@ class AdminCog(commands.Cog):
             json.dump(self.config, f, indent=4)
 
     @app_commands.command(name="add_support_role", description="Fügt eine Supportrolle hinzu.")
-    @app_commands.describe(role_id="Die ID der hinzuzufügenden Rolle.")
-    async def add_support_role(self, interaction: discord.Interaction, role_id: int):
+    @app_commands.describe(role_id="Die ID der hinzuzufügenden Rolle (als String).")
+    async def add_support_role(self, interaction: discord.Interaction, role_id: str):
         """Fügt eine Supportrolle hinzu."""
+        role_id = int(role_id)  # Konvertiere zu int für die interne Verarbeitung
         if role_id not in self.config["support_roles"]:
             self.config["support_roles"].append(role_id)
             self.save_config()
@@ -190,9 +191,10 @@ class AdminCog(commands.Cog):
             )
 
     @app_commands.command(name="remove_support_role", description="Entfernt eine Supportrolle.")
-    @app_commands.describe(role_id="Die ID der zu entfernenden Rolle.")
-    async def remove_support_role(self, interaction: discord.Interaction, role_id: int):
+    @app_commands.describe(role_id="Die ID der zu entfernenden Rolle (als String).")
+    async def remove_support_role(self, interaction: discord.Interaction, role_id: str):
         """Entfernt eine Supportrolle."""
+        role_id = int(role_id)  # Konvertiere zu int
         if role_id in self.config["support_roles"]:
             self.config["support_roles"].remove(role_id)
             self.save_config()
@@ -207,9 +209,10 @@ class AdminCog(commands.Cog):
             )
 
     @app_commands.command(name="add_support_user", description="Fügt einen Benutzer als Supporter hinzu.")
-    @app_commands.describe(user_id="Die ID des hinzuzufügenden Benutzers.")
-    async def add_support_user(self, interaction: discord.Interaction, user_id: int):
+    @app_commands.describe(user_id="Die ID des hinzuzufügenden Benutzers (als String).")
+    async def add_support_user(self, interaction: discord.Interaction, user_id: str):
         """Fügt einen Benutzer als Supporter hinzu."""
+        user_id = int(user_id)  # Konvertiere zu int
         if user_id not in self.config["support_users"]:
             self.config["support_users"].append(user_id)
             self.save_config()
@@ -224,9 +227,10 @@ class AdminCog(commands.Cog):
             )
 
     @app_commands.command(name="remove_support_user", description="Entfernt einen Benutzer als Supporter.")
-    @app_commands.describe(user_id="Die ID des zu entfernenden Benutzers.")
-    async def remove_support_user(self, interaction: discord.Interaction, user_id: int):
+    @app_commands.describe(user_id="Die ID des zu entfernenden Benutzers (als String).")
+    async def remove_support_user(self, interaction: discord.Interaction, user_id: str):
         """Entfernt einen Benutzer als Supporter."""
+        user_id = int(user_id)  # Konvertiere zu int
         if user_id in self.config["support_users"]:
             self.config["support_users"].remove(user_id)
             self.save_config()
@@ -241,9 +245,10 @@ class AdminCog(commands.Cog):
             )
 
     @app_commands.command(name="set_support_channel", description="Legt den Kanal für Support-Threads fest.")
-    @app_commands.describe(channel_id="Die ID des Support-Kanals.")
-    async def set_support_channel(self, interaction: discord.Interaction, channel_id: int):
+    @app_commands.describe(channel_id="Die ID des Support-Kanals (als String).")
+    async def set_support_channel(self, interaction: discord.Interaction, channel_id: str):
         """Legt den Kanal für Support-Threads fest."""
+        channel_id = int(channel_id)  # Konvertiere zu int
         self.config["support_channel_id"] = channel_id
         self.save_config()
         await interaction.response.send_message(

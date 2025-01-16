@@ -107,38 +107,80 @@ class Tickets(commands.Cog):
         except mysql.connector.Error as e:
             print(f"[ERROR] Fehler bei update_ticket: {e}")
 
-    @commands.command(name="setup_tickets", help="Richtet das Ticketsystem ein.")
-    async def setup_tickets(self, ctx):
-        """Erstellt Kategorien und das Ticket-Menü."""
-        guild = ctx.guild
+    @commands.command(name="setup_ticket", description="Richtet das Ticketsystem ein.")
+    async def setup_ticket(self, interaction: discord.Interaction):
+        """Richtet das Ticketsystem ein."""
+        guild = interaction.guild
         categories_created = []
         categories_existing = []
 
         try:
+            cursor = self.db_connection.cursor(dictionary=True)
+
             # Kategorien erstellen oder prüfen
-            for name in self.categories.keys():
-                category = discord.utils.get(guild.categories, id=self.categories.get(name))
-                if not category:
+            for name, _ in self.categories.items():
+                query = "SELECT category_id FROM ticket_categories WHERE name = %s AND guild_id = %s"
+                cursor.execute(query, (name, guild.id))
+                category_data = cursor.fetchone()
+
+                if not category_data:
+                    # Kategorie erstellen
                     category = await guild.create_category(f"✉️ {name.capitalize()}")
-                    self.categories[name] = category.id
                     categories_created.append(f"✉️ {name.capitalize()}")
+
+                    # In der Datenbank speichern
+                    query = "INSERT INTO ticket_categories (name, guild_id, category_id) VALUES (%s, %s, %s)"
+                    cursor.execute(query, (name, guild.id, category.id))
+                    self.db_connection.commit()
+                    self.categories[name] = category.id
+                    print(f"[DEBUG] Kategorie erstellt: {name.capitalize()} (ID: {category.id})")
                 else:
+                    # Kategorie existiert
                     categories_existing.append(f"✉️ {name.capitalize()}")
+                    self.categories[name] = category_data["category_id"]
 
-            self.save_category_ids()
+            # Menü-Channel erstellen oder prüfen
+            query = "SELECT channel_id FROM ticket_menu WHERE guild_id = %s"
+            cursor.execute(query, (guild.id,))
+            menu_data = cursor.fetchone()
 
-            # Textkanal für das Ticket-Menü erstellen
-            menu_category_id = self.categories.get("menu")
-            menu_category = discord.utils.get(guild.categories, id=menu_category_id)
-            if not menu_category:
-                await ctx.send("Fehler: Kategorie für Menü nicht gefunden.")
-                return
+            if not menu_data:
+                # Menü-Channel erstellen
+                menu_category_id = self.categories.get("menu")
+                menu_category = discord.utils.get(guild.categories, id=menu_category_id)
 
-            menu_channel = discord.utils.get(guild.text_channels, name="ticket-menu")
-            if not menu_channel:
+                if not menu_category:
+                    await interaction.response.send_message(
+                        "Fehler: Kategorie für Menü nicht gefunden. Kategorien müssen zuerst erstellt werden.",
+                        ephemeral=True,
+                    )
+                    return
+
+                # Erstelle den Channel in der Kategorie
                 menu_channel = await guild.create_text_channel("ticket-menu", category=menu_category)
 
-            # Überprüfen, ob ein Embed existiert
+                # In der Datenbank speichern
+                query = "INSERT INTO ticket_menu (guild_id, channel_id) VALUES (%s, %s)"
+                cursor.execute(query, (guild.id, menu_channel.id))
+                self.db_connection.commit()
+                print(f"[DEBUG] Textkanal 'ticket-menu' erstellt (ID: {menu_channel.id}).")
+            else:
+                # Menü-Channel existiert
+                menu_channel = discord.utils.get(guild.text_channels, id=menu_data["channel_id"])
+                if not menu_channel:
+                    # Wenn der Kanal in der Datenbank existiert, aber auf dem Server fehlt, neu erstellen
+                    menu_category_id = self.categories.get("menu")
+                    menu_category = discord.utils.get(guild.categories, id=menu_category_id)
+
+                    menu_channel = await guild.create_text_channel("ticket-menu", category=menu_category)
+
+                    # Datenbank aktualisieren
+                    query = "UPDATE ticket_menu SET channel_id = %s WHERE guild_id = %s"
+                    cursor.execute(query, (menu_channel.id, guild.id))
+                    self.db_connection.commit()
+                    print(f"[DEBUG] Textkanal 'ticket-menu' wurde neu erstellt (ID: {menu_channel.id}).")
+
+            # Überprüfen, ob ein gültiges Embed existiert
             async for message in menu_channel.history(limit=50):
                 if message.author == self.bot.user and message.embeds:
                     embed = message.embeds[0]
@@ -148,25 +190,35 @@ class Tickets(commands.Cog):
                         "Missbrauch wird mit Ausschluss geahndet!"
                     )
                     embed.color = discord.Color.blue()
-                    await message.edit(embed=embed, view=None)
-                    await ctx.send("Ticket-Menü wurde aktualisiert.")
+                    await message.edit(embed=embed, view=TicketView(self.bot))
+                    print("[DEBUG] Vorhandenes Embed aktualisiert.")
+                    await interaction.response.send_message(
+                        "Das Ticketsystem wurde eingerichtet.",
+                        ephemeral=True,
+                    )
                     return
 
-            # Neues Embed posten
+            # Neues Embed erstellen
             embed = discord.Embed(
                 title="🎫 Ticket-Support",
                 description="Klicke auf den Button unten, um ein Ticket zu erstellen. "
                             "Missbrauch wird mit Ausschluss geahndet!",
                 color=discord.Color.blue(),
             )
-            from .ticket_view import TicketView  # Import der View
             view = TicketView(self.bot)
             await menu_channel.send(embed=embed, view=view)
-            await ctx.send("Ticket-Menü wurde erfolgreich eingerichtet.")
+            print("[DEBUG] Neues Embed gepostet.")
+
+            await interaction.response.send_message(
+                f"Kategorien: {', '.join(categories_existing) if categories_existing else 'Keine'} existieren bereits.\n"
+                f"Kategorien: {', '.join(categories_created) if categories_created else 'Keine'} wurden erstellt.\n"
+                "Das Ticketsystem wurde erfolgreich eingerichtet.",
+                ephemeral=True,
+            )
 
         except Exception as e:
-            print(f"[ERROR] Fehler bei setup_tickets: {e}")
-            await ctx.send("❌ Ein Fehler ist aufgetreten.")
+            print(f"[ERROR] Fehler bei setup_ticket: {e}")
+            await interaction.response.send_message("❌ Ein Fehler ist aufgetreten.", ephemeral=True)
 
 
 async def setup(bot: commands.Bot):
