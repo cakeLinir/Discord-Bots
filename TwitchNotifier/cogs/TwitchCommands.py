@@ -18,6 +18,8 @@ class TwitchCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.session = aiohttp.ClientSession()
+        self.sent_messages = {}  # Zwischenspeicher für gesendete Nachrichten
+
         try:
             self.db_connection = pymysql.connect(
                 host=os.getenv("DB_HOST"),
@@ -31,8 +33,7 @@ class TwitchCommands(commands.Cog):
 
         self.twitch_client_id = os.getenv("TWITCH_CLIENT_ID")
         self.twitch_client_secret = os.getenv("TWITCH_CLIENT_SECRET")
-        self.twitch_token = None
-        self.sent_messages = {}  # Speichert gesendete Nachrichten für jeden Streamer
+        self.twitch_token = None  # Speichert gesendete Nachrichten für jeden Streamer
 
     async def cog_unload(self):
         if self.session:
@@ -135,7 +136,7 @@ class TwitchCommands(commands.Cog):
         return result[0] if result else None
 
     def load_sent_messages(self):
-        """Lädt die gesendeten Nachrichten aus der Datenbank."""
+        """Lädt gesendete Nachrichten aus der Datenbank."""
         try:
             cursor = self.db_connection.cursor()
             cursor.execute("SELECT streamer_name, message_id, channel_id FROM sent_notifications")
@@ -143,12 +144,42 @@ class TwitchCommands(commands.Cog):
             for streamer_name, message_id, channel_id in rows:
                 channel = self.bot.get_channel(channel_id)
                 if channel:
+                    # Nachrichten-Objekte aus Kanal laden
                     message = channel.fetch_message(message_id)
                     self.sent_messages[streamer_name] = message
             cursor.close()
-            logger.info("Gesendete Nachrichten wurden erfolgreich geladen.")
+            logger.info("Gesendete Nachrichten erfolgreich geladen.")
         except Exception as e:
             logger.error(f"Fehler beim Laden der gesendeten Nachrichten: {e}")
+
+    def save_message_to_db(self, streamer_name: str, message: discord.Message):
+        """Speichert oder aktualisiert eine gesendete Nachricht in der Datenbank."""
+        try:
+            cursor = self.db_connection.cursor()
+            cursor.execute(
+                """
+                INSERT INTO sent_notifications (streamer_name, message_id, channel_id)
+                VALUES (%s, %s, %s)
+                ON DUPLICATE KEY UPDATE message_id = VALUES(message_id), channel_id = VALUES(channel_id)
+                """,
+                (streamer_name, message.id, message.channel.id)
+            )
+            self.db_connection.commit()
+            cursor.close()
+            logger.info(f"Nachricht für {streamer_name} in der Datenbank gespeichert.")
+        except Exception as e:
+            logger.error(f"Fehler beim Speichern der Nachricht für {streamer_name}: {e}")
+
+    def remove_message_from_db(self, streamer_name: str):
+        """Entfernt eine gespeicherte Nachricht aus der Datenbank."""
+        try:
+            cursor = self.db_connection.cursor()
+            cursor.execute("DELETE FROM sent_notifications WHERE streamer_name = %s", (streamer_name,))
+            self.db_connection.commit()
+            cursor.close()
+            logger.info(f"Nachricht für {streamer_name} aus der Datenbank entfernt.")
+        except Exception as e:
+            logger.error(f"Fehler beim Entfernen der Nachricht für {streamer_name}: {e}")
 
     async def send_live_notification(self, streamer, stream_info):
         """Sendet oder aktualisiert eine Live-Benachrichtigung."""
@@ -165,32 +196,34 @@ class TwitchCommands(commands.Cog):
         embed = self.build_embed(stream_info)
         view = self.build_view(stream_info)
 
-        try:
-            if streamer in self.sent_messages:
-                # Nachricht aktualisieren
-                message = self.sent_messages[streamer]
+        if streamer in self.sent_messages:
+            # Nachricht aktualisieren
+            message = self.sent_messages[streamer]
+            try:
                 await message.edit(embed=embed, view=view)
                 logger.info(f"Nachricht für {streamer} aktualisiert.")
-            else:
-                # Neue Nachricht senden
+            except Exception as e:
+                logger.error(f"Fehler beim Aktualisieren der Nachricht für {streamer}: {e}")
+        else:
+            # Neue Nachricht senden
+            try:
                 message = await channel.send(embed=embed, view=view)
                 self.sent_messages[streamer] = message
+                self.save_message_to_db(streamer, message)
+                logger.info(f"Nachricht für {streamer} gesendet.")
+            except Exception as e:
+                logger.error(f"Fehler beim Senden der Nachricht für {streamer}: {e}")
 
-                # Nachricht in der Datenbank speichern
-                cursor = self.db_connection.cursor()
-                cursor.execute(
-                    """
-                    INSERT INTO sent_notifications (streamer_name, message_id, channel_id)
-                    VALUES (%s, %s, %s)
-                    ON DUPLICATE KEY UPDATE message_id = VALUES(message_id), channel_id = VALUES(channel_id)
-                    """,
-                    (streamer, message.id, channel_id)
-                )
-                self.db_connection.commit()
-                cursor.close()
-                logger.info(f"Nachricht für {streamer} gesendet und gespeichert.")
-        except Exception as e:
-            logger.error(f"Fehler beim Senden oder Aktualisieren der Nachricht für {streamer}: {e}")
+    async def remove_notification(self, streamer):
+        """Entfernt die Benachrichtigung für einen Streamer."""
+        if streamer in self.sent_messages:
+            try:
+                message = self.sent_messages.pop(streamer)
+                await message.delete()
+                self.remove_message_from_db(streamer)
+                logger.info(f"Nachricht für {streamer} entfernt.")
+            except Exception as e:
+                logger.error(f"Fehler beim Entfernen der Nachricht für {streamer}: {e}")
 
     def build_embed(self, stream_info: dict) -> discord.Embed:
         """Erstellt ein Embed für den Live-Streamer."""
@@ -204,41 +237,25 @@ class TwitchCommands(commands.Cog):
         embed.add_field(name="Zuschauer", value=f"{stream_info['viewer_count']:,}", inline=True)
         embed.set_thumbnail(url=stream_info["channel_icon"])
         embed.set_image(url=stream_info["thumbnail"])
-        embed.set_footer(
-            text="Twitch",
-            icon_url="https://static-00.iconduck.com/assets.00/twitch-icon-2048x2048-tipdihgh.png"
-        )
+        embed.set_footer(text="Twitch", icon_url="https://static-00.iconduck.com/assets.00/twitch-icon-2048x2048-tipdihgh.png")
         return embed
 
     def build_view(self, stream_info: dict) -> discord.ui.View:
-        """Erstellt eine View mit einem Button zum Stream des Streamers."""
+        """Erstellt eine View mit einem Button zum Stream."""
         view = discord.ui.View()
-        view.add_item(discord.ui.Button(
-            label="🔗 Zum Stream",
-            url=stream_info["channel_url"],
-            style=discord.ButtonStyle.link
-        ))
+        view.add_item(discord.ui.Button(label="🔗 Zum Stream", url=stream_info["channel_url"], style=discord.ButtonStyle.link))
         return view
 
-    async def remove_notification(self, streamer):
-        """Entfernt die Benachrichtigung für einen Streamer."""
-        if streamer in self.sent_messages:
-            try:
-                message = self.sent_messages.pop(streamer)
-                await message.delete()
-
-                # Nachricht aus der Datenbank entfernen
-                cursor = self.db_connection.cursor()
-                cursor.execute(
-                    "DELETE FROM sent_notifications WHERE streamer_name = %s",
-                    (streamer,)
-                )
-                self.db_connection.commit()
-                cursor.close()
-
-                logger.info(f"Nachricht für {streamer} entfernt.")
-            except Exception as e:
-                logger.error(f"Fehler beim Entfernen der Nachricht für {streamer}: {e}")
+    def remove_message_from_db(self, streamer_name: str):
+        """Entfernt eine gespeicherte Nachricht aus der Datenbank."""
+        try:
+            cursor = self.db_connection.cursor()
+            cursor.execute("DELETE FROM sent_notifications WHERE streamer_name = %s", (streamer_name,))
+            self.db_connection.commit()
+            cursor.close()
+            logger.info(f"Nachricht für {streamer_name} aus der Datenbank entfernt.")
+        except Exception as e:
+            logger.error(f"Fehler beim Entfernen der Nachricht für {streamer_name}: {e}")
 
     @app_commands.command(name="set_notification_channel", description="Setzt den Kanal für Twitch-Benachrichtigungen.")
     @app_commands.checks.has_permissions(administrator=True)
