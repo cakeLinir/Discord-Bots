@@ -134,21 +134,6 @@ class TwitchCommands(commands.Cog):
         cursor.close()
         return result[0] if result else None
 
-    def get_message_from_db(self, streamer_name: str):
-        """Lädt die Nachricht eines Streamers aus der Datenbank."""
-        try:
-            cursor = self.db_connection.cursor()
-            cursor.execute(
-                "SELECT message_id, channel_id FROM sent_notifications WHERE streamer_name = %s LIMIT 1",
-                (streamer_name,)
-            )
-            result = cursor.fetchone()
-            cursor.close()
-            return result
-        except Exception as e:
-            logger.error(f"Fehler beim Abrufen der Nachricht für {streamer_name}: {e}")
-            return None
-
     def save_message_to_db(self, streamer_name: str, message: discord.Message):
         """Speichert eine Nachricht in der Datenbank."""
         try:
@@ -166,6 +151,21 @@ class TwitchCommands(commands.Cog):
             logger.info(f"Nachricht für {streamer_name} in der Datenbank gespeichert.")
         except Exception as e:
             logger.error(f"Fehler beim Speichern der Nachricht für {streamer_name}: {e}")
+
+    def get_message_from_db(self, streamer_name: str):
+        """Lädt die Nachricht eines Streamers aus der Datenbank."""
+        try:
+            cursor = self.db_connection.cursor()
+            cursor.execute(
+                "SELECT message_id, channel_id FROM sent_notifications WHERE streamer_name = %s LIMIT 1",
+                (streamer_name,)
+            )
+            result = cursor.fetchone()
+            cursor.close()
+            return result
+        except Exception as e:
+            logger.error(f"Fehler beim Abrufen der Nachricht für {streamer_name}: {e}")
+            return None
 
     def remove_message_from_db(self, streamer_name: str):
         """Entfernt eine Nachricht aus der Datenbank."""
@@ -205,6 +205,11 @@ class TwitchCommands(commands.Cog):
                     message = await channel.fetch_message(message_id)
                     await message.edit(embed=embed, view=view)
                     logger.info(f"Nachricht für {streamer} aktualisiert.")
+                except discord.NotFound:
+                    # Nachricht wurde gelöscht, neue Nachricht senden
+                    logger.warning(f"Nachricht für {streamer} nicht gefunden. Sende eine neue Nachricht.")
+                    message = await channel.send(embed=embed, view=view)
+                    self.save_message_to_db(streamer, message)
                 except Exception as e:
                     logger.error(f"Fehler beim Aktualisieren der Nachricht für {streamer}: {e}")
         else:
@@ -218,14 +223,22 @@ class TwitchCommands(commands.Cog):
 
     async def remove_notification(self, streamer):
         """Entfernt die Benachrichtigung für einen Streamer."""
-        if streamer in self.sent_messages:
-            try:
-                message = self.sent_messages.pop(streamer)
-                await message.delete()
-                self.remove_message_from_db(streamer)
-                logger.info(f"Nachricht für {streamer} entfernt.")
-            except Exception as e:
-                logger.error(f"Fehler beim Entfernen der Nachricht für {streamer}: {e}")
+        message_data = self.get_message_from_db(streamer)
+        if message_data:
+            message_id, channel_id = message_data
+            channel = self.bot.get_channel(channel_id)
+            if channel:
+                try:
+                    message = await channel.fetch_message(message_id)
+                    await message.delete()
+                    self.remove_message_from_db(streamer)
+                    logger.info(f"Nachricht für {streamer} entfernt.")
+                except discord.NotFound:
+                    # Nachricht bereits gelöscht
+                    logger.warning(f"Nachricht für {streamer} wurde bereits gelöscht.")
+                    self.remove_message_from_db(streamer)
+                except Exception as e:
+                    logger.error(f"Fehler beim Entfernen der Nachricht für {streamer}: {e}")
 
     def build_embed(self, stream_info: dict) -> discord.Embed:
         """Erstellt ein Embed für den Live-Streamer."""
@@ -300,6 +313,20 @@ class TwitchCommands(commands.Cog):
         else:
             streamers_list = "\n".join(streamers)
             await interaction.response.send_message(f"Überwachte Streamer:\n{streamers_list}", ephemeral=True)
+
+    @app_commands.command(name="help", description="Zeigt eine Liste der verfügbaren Befehle und deren Beschreibungen.")
+    async def help_command(self, interaction: discord.Interaction):
+        """Zeigt eine Liste der verfügbaren Befehle an."""
+        help_text = """
+    **Verfügbare Befehle:**
+
+    /set_notification_channel [Kanal] - Setzt den Kanal für Twitch-Benachrichtigungen (nur Administratoren).
+    /add_streamer [Streamername] - Fügt einen Streamer zur Überwachungsliste hinzu (nur Administratoren).
+    /remove_streamer [Streamername] - Entfernt einen Streamer aus der Überwachungsliste (nur Administratoren).
+    /list_streamers - Listet alle überwachten Streamer auf.
+    /help - Zeigt diese Hilfe an.
+        """
+        await interaction.response.send_message(help_text, ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(TwitchCommands(bot))
