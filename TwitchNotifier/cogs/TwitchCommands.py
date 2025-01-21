@@ -18,7 +18,6 @@ class TwitchCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.session = aiohttp.ClientSession()
-        self.sent_messages = {}  # Zwischenspeicher für gesendete Nachrichten
 
         try:
             self.db_connection = pymysql.connect(
@@ -135,25 +134,23 @@ class TwitchCommands(commands.Cog):
         cursor.close()
         return result[0] if result else None
 
-    def load_sent_messages(self):
-        """Lädt gesendete Nachrichten aus der Datenbank."""
+    def get_message_from_db(self, streamer_name: str):
+        """Lädt die Nachricht eines Streamers aus der Datenbank."""
         try:
             cursor = self.db_connection.cursor()
-            cursor.execute("SELECT streamer_name, message_id, channel_id FROM sent_notifications")
-            rows = cursor.fetchall()
-            for streamer_name, message_id, channel_id in rows:
-                channel = self.bot.get_channel(channel_id)
-                if channel:
-                    # Nachrichten-Objekte aus Kanal laden
-                    message = channel.fetch_message(message_id)
-                    self.sent_messages[streamer_name] = message
+            cursor.execute(
+                "SELECT message_id, channel_id FROM sent_notifications WHERE streamer_name = %s LIMIT 1",
+                (streamer_name,)
+            )
+            result = cursor.fetchone()
             cursor.close()
-            logger.info("Gesendete Nachrichten erfolgreich geladen.")
+            return result
         except Exception as e:
-            logger.error(f"Fehler beim Laden der gesendeten Nachrichten: {e}")
+            logger.error(f"Fehler beim Abrufen der Nachricht für {streamer_name}: {e}")
+            return None
 
     def save_message_to_db(self, streamer_name: str, message: discord.Message):
-        """Speichert oder aktualisiert eine gesendete Nachricht in der Datenbank."""
+        """Speichert eine Nachricht in der Datenbank."""
         try:
             cursor = self.db_connection.cursor()
             cursor.execute(
@@ -171,7 +168,7 @@ class TwitchCommands(commands.Cog):
             logger.error(f"Fehler beim Speichern der Nachricht für {streamer_name}: {e}")
 
     def remove_message_from_db(self, streamer_name: str):
-        """Entfernt eine gespeicherte Nachricht aus der Datenbank."""
+        """Entfernt eine Nachricht aus der Datenbank."""
         try:
             cursor = self.db_connection.cursor()
             cursor.execute("DELETE FROM sent_notifications WHERE streamer_name = %s", (streamer_name,))
@@ -196,19 +193,24 @@ class TwitchCommands(commands.Cog):
         embed = self.build_embed(stream_info)
         view = self.build_view(stream_info)
 
-        if streamer in self.sent_messages:
+        # Nachricht aus der Datenbank abrufen
+        message_data = self.get_message_from_db(streamer)
+
+        if message_data:
             # Nachricht aktualisieren
-            message = self.sent_messages[streamer]
-            try:
-                await message.edit(embed=embed, view=view)
-                logger.info(f"Nachricht für {streamer} aktualisiert.")
-            except Exception as e:
-                logger.error(f"Fehler beim Aktualisieren der Nachricht für {streamer}: {e}")
+            message_id, channel_id = message_data
+            channel = self.bot.get_channel(channel_id)
+            if channel:
+                try:
+                    message = await channel.fetch_message(message_id)
+                    await message.edit(embed=embed, view=view)
+                    logger.info(f"Nachricht für {streamer} aktualisiert.")
+                except Exception as e:
+                    logger.error(f"Fehler beim Aktualisieren der Nachricht für {streamer}: {e}")
         else:
             # Neue Nachricht senden
             try:
                 message = await channel.send(embed=embed, view=view)
-                self.sent_messages[streamer] = message
                 self.save_message_to_db(streamer, message)
                 logger.info(f"Nachricht für {streamer} gesendet.")
             except Exception as e:
