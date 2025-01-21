@@ -1065,292 +1065,293 @@ sys|schema||mysql.sys|localhost|TRIGGER|G</Grants>
       <Engine>InnoDB</Engine>
       <CollationName>utf8mb4_0900_ai_ci</CollationName>
     </table>
-    <table id="306" parent="294" name="stream_logs">
+    <table id="306" parent="294" name="sent_notifications">
       <Engine>InnoDB</Engine>
       <CollationName>utf8mb4_0900_ai_ci</CollationName>
     </table>
-    <table id="307" parent="294" name="streamers">
+    <table id="307" parent="294" name="stream_logs">
       <Engine>InnoDB</Engine>
       <CollationName>utf8mb4_0900_ai_ci</CollationName>
     </table>
-    <column id="308" parent="299" name="id">
+    <table id="308" parent="294" name="streamers">
+      <Engine>InnoDB</Engine>
+      <CollationName>utf8mb4_0900_ai_ci</CollationName>
+    </table>
+    <column id="309" parent="299" name="id">
       <AutoIncrement>1</AutoIncrement>
       <NotNull>1</NotNull>
       <Position>1</Position>
       <StoredType>bigint|0s</StoredType>
     </column>
-    <column id="309" parent="299" name="clash_tag">
+    <column id="310" parent="299" name="clash_tag">
       <Position>2</Position>
       <StoredType>varchar(50)|0s</StoredType>
     </column>
-    <column id="310" parent="299" name="name">
+    <column id="311" parent="299" name="name">
       <Position>3</Position>
       <StoredType>varchar(100)|0s</StoredType>
     </column>
-    <column id="311" parent="299" name="created_at">
+    <column id="312" parent="299" name="created_at">
       <Position>4</Position>
       <StoredType>datetime|0s</StoredType>
     </column>
-    <index id="312" parent="299" name="PRIMARY">
+    <index id="313" parent="299" name="PRIMARY">
       <ColNames>id</ColNames>
       <Type>btree</Type>
       <Unique>1</Unique>
     </index>
-    <index id="313" parent="299" name="clash_tag">
+    <index id="314" parent="299" name="clash_tag">
       <ColNames>clash_tag</ColNames>
       <Type>btree</Type>
       <Unique>1</Unique>
     </index>
-    <key id="314" parent="299" name="PRIMARY">
+    <key id="315" parent="299" name="PRIMARY">
       <NameSurrogate>1</NameSurrogate>
       <Primary>1</Primary>
       <UnderlyingIndexName>PRIMARY</UnderlyingIndexName>
     </key>
-    <key id="315" parent="299" name="clash_tag">
+    <key id="316" parent="299" name="clash_tag">
       <UnderlyingIndexName>clash_tag</UnderlyingIndexName>
     </key>
-    <column id="316" parent="300" name="id">
+    <column id="317" parent="300" name="id">
       <NotNull>1</NotNull>
       <Position>1</Position>
       <StoredType>bigint|0s</StoredType>
     </column>
-    <column id="317" parent="300" name="username">
+    <column id="318" parent="300" name="username">
       <Position>2</Position>
       <StoredType>varchar(100)|0s</StoredType>
     </column>
-    <column id="318" parent="300" name="clash_tag">
+    <column id="319" parent="300" name="clash_tag">
       <Position>3</Position>
       <StoredType>varchar(50)|0s</StoredType>
     </column>
-    <column id="319" parent="300" name="verified_at">
+    <column id="320" parent="300" name="verified_at">
       <Position>4</Position>
       <StoredType>datetime|0s</StoredType>
     </column>
-    <column id="320" parent="300" name="clan_name">
+    <column id="321" parent="300" name="clan_name">
       <Position>5</Position>
       <StoredType>varchar(100)|0s</StoredType>
     </column>
-    <index id="321" parent="300" name="PRIMARY">
+    <index id="322" parent="300" name="PRIMARY">
       <ColNames>id</ColNames>
       <Type>btree</Type>
       <Unique>1</Unique>
     </index>
-    <key id="322" parent="300" name="PRIMARY">
+    <key id="323" parent="300" name="PRIMARY">
       <NameSurrogate>1</NameSurrogate>
       <Primary>1</Primary>
       <UnderlyingIndexName>PRIMARY</UnderlyingIndexName>
     </key>
-    <column id="323" parent="301" name="id">
+    <column id="324" parent="301" name="id">
       <AutoIncrement>1</AutoIncrement>
       <NotNull>1</NotNull>
       <Position>1</Position>
       <StoredType>bigint|0s</StoredType>
     </column>
-    <column id="324" parent="301" name="user_id">
+    <column id="325" parent="301" name="user_id">
       <Position>2</Position>
       <StoredType>bigint|0s</StoredType>
     </column>
-    <column id="325" parent="301" name="moderator_id">
+    <column id="326" parent="301" name="moderator_id">
       <Position>3</Position>
       <StoredType>bigint|0s</StoredType>
     </column>
-    <column id="326" parent="301" name="action">
+    <column id="327" parent="301" name="action">
       <Position>4</Position>
       <StoredType>enum(&apos;mute&apos;, &apos;ban&apos;, &apos;warn&apos;)|0e</StoredType>
     </column>
-    <column id="327" parent="301" name="reason">
+    <column id="328" parent="301" name="reason">
       <Position>5</Position>
       <StoredType>text|0s</StoredType>
     </column>
-    <column id="328" parent="301" name="timestamp">
+    <column id="329" parent="301" name="timestamp">
       <Position>6</Position>
       <StoredType>datetime|0s</StoredType>
     </column>
-    <index id="329" parent="301" name="PRIMARY">
+    <index id="330" parent="301" name="PRIMARY">
       <ColNames>id</ColNames>
       <Type>btree</Type>
       <Unique>1</Unique>
     </index>
-    <key id="330" parent="301" name="PRIMARY">
+    <key id="331" parent="301" name="PRIMARY">
       <NameSurrogate>1</NameSurrogate>
       <Primary>1</Primary>
       <UnderlyingIndexName>PRIMARY</UnderlyingIndexName>
     </key>
-    <column id="331" parent="302" name="id">
+    <column id="332" parent="302" name="id">
       <AutoIncrement>1</AutoIncrement>
       <NotNull>1</NotNull>
       <Position>1</Position>
       <StoredType>bigint|0s</StoredType>
     </column>
-    <column id="332" parent="302" name="user_id">
+    <column id="333" parent="302" name="user_id">
       <Position>2</Position>
       <StoredType>bigint|0s</StoredType>
     </column>
-    <column id="333" parent="302" name="created_at">
+    <column id="334" parent="302" name="created_at">
       <Position>3</Position>
       <StoredType>datetime|0s</StoredType>
     </column>
-    <column id="334" parent="302" name="status">
+    <column id="335" parent="302" name="status">
       <DefaultExpression>&apos;open&apos;</DefaultExpression>
       <Position>4</Position>
       <StoredType>enum(&apos;open&apos;, &apos;closed&apos;)|0e</StoredType>
     </column>
-    <column id="335" parent="302" name="subject">
+    <column id="336" parent="302" name="subject">
       <Position>5</Position>
       <StoredType>varchar(255)|0s</StoredType>
     </column>
-    <column id="336" parent="302" name="description">
+    <column id="337" parent="302" name="description">
       <Position>6</Position>
       <StoredType>text|0s</StoredType>
     </column>
-    <index id="337" parent="302" name="PRIMARY">
+    <index id="338" parent="302" name="PRIMARY">
       <ColNames>id</ColNames>
       <Type>btree</Type>
       <Unique>1</Unique>
     </index>
-    <key id="338" parent="302" name="PRIMARY">
+    <key id="339" parent="302" name="PRIMARY">
       <NameSurrogate>1</NameSurrogate>
       <Primary>1</Primary>
       <UnderlyingIndexName>PRIMARY</UnderlyingIndexName>
     </key>
-    <column id="339" parent="303" name="id">
+    <column id="340" parent="303" name="id">
       <NotNull>1</NotNull>
       <Position>1</Position>
       <StoredType>bigint|0s</StoredType>
     </column>
-    <column id="340" parent="303" name="username">
+    <column id="341" parent="303" name="username">
       <Position>2</Position>
       <StoredType>varchar(100)|0s</StoredType>
     </column>
-    <column id="341" parent="303" name="joined_at">
+    <column id="342" parent="303" name="joined_at">
       <Position>3</Position>
       <StoredType>datetime|0s</StoredType>
     </column>
-    <column id="342" parent="303" name="is_banned">
+    <column id="343" parent="303" name="is_banned">
       <DefaultExpression>0</DefaultExpression>
       <Position>4</Position>
       <StoredType>tinyint(1)|0s</StoredType>
     </column>
-    <column id="343" parent="303" name="warnings">
+    <column id="344" parent="303" name="warnings">
       <DefaultExpression>0</DefaultExpression>
       <Position>5</Position>
       <StoredType>int|0s</StoredType>
     </column>
-    <index id="344" parent="303" name="PRIMARY">
+    <index id="345" parent="303" name="PRIMARY">
       <ColNames>id</ColNames>
       <Type>btree</Type>
       <Unique>1</Unique>
     </index>
-    <key id="345" parent="303" name="PRIMARY">
+    <key id="346" parent="303" name="PRIMARY">
       <NameSurrogate>1</NameSurrogate>
       <Primary>1</Primary>
       <UnderlyingIndexName>PRIMARY</UnderlyingIndexName>
     </key>
-    <column id="346" parent="304" name="id">
+    <column id="347" parent="304" name="id">
       <AutoIncrement>1</AutoIncrement>
       <NotNull>1</NotNull>
       <Position>1</Position>
       <StoredType>int|0s</StoredType>
     </column>
-    <column id="347" parent="304" name="channel_id">
+    <column id="348" parent="304" name="channel_id">
       <NotNull>1</NotNull>
       <Position>2</Position>
       <StoredType>bigint|0s</StoredType>
     </column>
-    <index id="348" parent="304" name="PRIMARY">
+    <index id="349" parent="304" name="PRIMARY">
       <ColNames>id</ColNames>
       <Type>btree</Type>
       <Unique>1</Unique>
     </index>
-    <index id="349" parent="304" name="channel_id">
+    <index id="350" parent="304" name="channel_id">
       <ColNames>channel_id</ColNames>
       <Type>btree</Type>
       <Unique>1</Unique>
     </index>
-    <key id="350" parent="304" name="PRIMARY">
+    <key id="351" parent="304" name="PRIMARY">
       <NameSurrogate>1</NameSurrogate>
       <Primary>1</Primary>
       <UnderlyingIndexName>PRIMARY</UnderlyingIndexName>
     </key>
-    <key id="351" parent="304" name="channel_id">
+    <key id="352" parent="304" name="channel_id">
       <UnderlyingIndexName>channel_id</UnderlyingIndexName>
     </key>
-    <column id="352" parent="305" name="id">
+    <column id="353" parent="305" name="id">
       <AutoIncrement>1</AutoIncrement>
       <NotNull>1</NotNull>
       <Position>1</Position>
       <StoredType>bigint|0s</StoredType>
     </column>
-    <column id="353" parent="305" name="streamer_id">
+    <column id="354" parent="305" name="streamer_id">
       <Position>2</Position>
       <StoredType>bigint|0s</StoredType>
     </column>
-    <column id="354" parent="305" name="message_id">
+    <column id="355" parent="305" name="message_id">
       <Position>3</Position>
       <StoredType>bigint|0s</StoredType>
     </column>
-    <column id="355" parent="305" name="notified_at">
+    <column id="356" parent="305" name="notified_at">
       <Position>4</Position>
       <StoredType>datetime|0s</StoredType>
     </column>
-    <index id="356" parent="305" name="PRIMARY">
+    <index id="357" parent="305" name="PRIMARY">
       <ColNames>id</ColNames>
       <Type>btree</Type>
       <Unique>1</Unique>
     </index>
-    <key id="357" parent="305" name="PRIMARY">
+    <key id="358" parent="305" name="PRIMARY">
       <NameSurrogate>1</NameSurrogate>
       <Primary>1</Primary>
       <UnderlyingIndexName>PRIMARY</UnderlyingIndexName>
     </key>
-    <column id="358" parent="306" name="id">
+    <column id="359" parent="306" name="streamer_name">
+      <NotNull>1</NotNull>
+      <Position>1</Position>
+      <StoredType>varchar(255)|0s</StoredType>
+    </column>
+    <column id="360" parent="306" name="message_id">
+      <NotNull>1</NotNull>
+      <Position>2</Position>
+      <StoredType>bigint|0s</StoredType>
+    </column>
+    <column id="361" parent="306" name="channel_id">
+      <NotNull>1</NotNull>
+      <Position>3</Position>
+      <StoredType>bigint|0s</StoredType>
+    </column>
+    <index id="362" parent="306" name="PRIMARY">
+      <ColNames>streamer_name</ColNames>
+      <Type>btree</Type>
+      <Unique>1</Unique>
+    </index>
+    <key id="363" parent="306" name="PRIMARY">
+      <NameSurrogate>1</NameSurrogate>
+      <Primary>1</Primary>
+      <UnderlyingIndexName>PRIMARY</UnderlyingIndexName>
+    </key>
+    <column id="364" parent="307" name="id">
       <AutoIncrement>1</AutoIncrement>
       <NotNull>1</NotNull>
       <Position>1</Position>
       <StoredType>bigint|0s</StoredType>
     </column>
-    <column id="359" parent="306" name="streamer_id">
+    <column id="365" parent="307" name="streamer_id">
       <Position>2</Position>
       <StoredType>bigint|0s</StoredType>
     </column>
-    <column id="360" parent="306" name="stream_title">
+    <column id="366" parent="307" name="stream_title">
       <Position>3</Position>
       <StoredType>varchar(255)|0s</StoredType>
     </column>
-    <column id="361" parent="306" name="started_at">
+    <column id="367" parent="307" name="started_at">
       <Position>4</Position>
       <StoredType>datetime|0s</StoredType>
     </column>
-    <column id="362" parent="306" name="ended_at">
+    <column id="368" parent="307" name="ended_at">
       <Position>5</Position>
-      <StoredType>datetime|0s</StoredType>
-    </column>
-    <index id="363" parent="306" name="PRIMARY">
-      <ColNames>id</ColNames>
-      <Type>btree</Type>
-      <Unique>1</Unique>
-    </index>
-    <key id="364" parent="306" name="PRIMARY">
-      <NameSurrogate>1</NameSurrogate>
-      <Primary>1</Primary>
-      <UnderlyingIndexName>PRIMARY</UnderlyingIndexName>
-    </key>
-    <column id="365" parent="307" name="id">
-      <AutoIncrement>1</AutoIncrement>
-      <NotNull>1</NotNull>
-      <Position>1</Position>
-      <StoredType>bigint|0s</StoredType>
-    </column>
-    <column id="366" parent="307" name="twitch_username">
-      <Position>2</Position>
-      <StoredType>varchar(100)|0s</StoredType>
-    </column>
-    <column id="367" parent="307" name="discord_channel">
-      <Position>3</Position>
-      <StoredType>bigint|0s</StoredType>
-    </column>
-    <column id="368" parent="307" name="added_at">
-      <Position>4</Position>
       <StoredType>datetime|0s</StoredType>
     </column>
     <index id="369" parent="307" name="PRIMARY">
@@ -1358,17 +1359,45 @@ sys|schema||mysql.sys|localhost|TRIGGER|G</Grants>
       <Type>btree</Type>
       <Unique>1</Unique>
     </index>
-    <index id="370" parent="307" name="twitch_username">
-      <ColNames>twitch_username</ColNames>
-      <Type>btree</Type>
-      <Unique>1</Unique>
-    </index>
-    <key id="371" parent="307" name="PRIMARY">
+    <key id="370" parent="307" name="PRIMARY">
       <NameSurrogate>1</NameSurrogate>
       <Primary>1</Primary>
       <UnderlyingIndexName>PRIMARY</UnderlyingIndexName>
     </key>
-    <key id="372" parent="307" name="twitch_username">
+    <column id="371" parent="308" name="id">
+      <AutoIncrement>1</AutoIncrement>
+      <NotNull>1</NotNull>
+      <Position>1</Position>
+      <StoredType>bigint|0s</StoredType>
+    </column>
+    <column id="372" parent="308" name="twitch_username">
+      <Position>2</Position>
+      <StoredType>varchar(100)|0s</StoredType>
+    </column>
+    <column id="373" parent="308" name="discord_channel">
+      <Position>3</Position>
+      <StoredType>bigint|0s</StoredType>
+    </column>
+    <column id="374" parent="308" name="added_at">
+      <Position>4</Position>
+      <StoredType>datetime|0s</StoredType>
+    </column>
+    <index id="375" parent="308" name="PRIMARY">
+      <ColNames>id</ColNames>
+      <Type>btree</Type>
+      <Unique>1</Unique>
+    </index>
+    <index id="376" parent="308" name="twitch_username">
+      <ColNames>twitch_username</ColNames>
+      <Type>btree</Type>
+      <Unique>1</Unique>
+    </index>
+    <key id="377" parent="308" name="PRIMARY">
+      <NameSurrogate>1</NameSurrogate>
+      <Primary>1</Primary>
+      <UnderlyingIndexName>PRIMARY</UnderlyingIndexName>
+    </key>
+    <key id="378" parent="308" name="twitch_username">
       <UnderlyingIndexName>twitch_username</UnderlyingIndexName>
     </key>
   </database-model>
