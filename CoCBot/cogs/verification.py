@@ -198,14 +198,25 @@ class Verification(commands.Cog):
         try:
             # Benutzer aus der Datenbank entfernen
             self.remove_user(interaction.user.id)
+            logger.info(f"Benutzer {interaction.user.id} aus der Datenbank entfernt.")
 
-            # Liste der Rollen, die entfernt werden sollen
-            roles_to_remove = ["Leader", "coLeader", "Elder", "Member"]
+            # Liste der zu entfernenden Rollen anhand der Datenbank (mit IDs)
+            cursor = self.db_connection.cursor()
+            cursor.execute("SELECT discord_role_id FROM clan_roles")
+            role_ids = [row[0] for row in cursor.fetchall()]
+            cursor.close()
+
+            if not role_ids:
+                await interaction.response.send_message(
+                    "Keine Rollen zum Entfernen gefunden. Überprüfe die Datenbank.",
+                    ephemeral=True
+                )
+                return
+
+            # Entfernen der Rollen
             removed_roles = []
-
-            # Überprüfen, ob der Benutzer eine der Rollen hat
-            for role_name in roles_to_remove:
-                discord_role = discord.utils.get(interaction.guild.roles, name=role_name)
+            for role_id in role_ids:
+                discord_role = interaction.guild.get_role(role_id)
                 if discord_role and discord_role in interaction.user.roles:
                     await interaction.user.remove_roles(discord_role)
                     removed_roles.append(discord_role.name)
@@ -215,7 +226,7 @@ class Verification(commands.Cog):
                 removed_roles_list = ", ".join(removed_roles)
                 message = f"Deine Verifikation wurde entfernt. Entfernte Rollen: {removed_roles_list}."
             else:
-                message = "Deine Verifikation wurde entfernt. Es wurden keine zugeordneten Rollen gefunden."
+                message = "Deine Verifikation wurde entfernt. Keine passenden Rollen gefunden."
 
             await interaction.response.send_message(message, ephemeral=True)
 
