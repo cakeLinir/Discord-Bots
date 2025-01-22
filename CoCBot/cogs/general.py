@@ -23,7 +23,7 @@ class General(commands.Cog):
             color=discord.Color.blue()
         )
         embed.add_field(name="Version", value="1.0", inline=False)
-        embed.add_field(name="Entwickler", value="Dein Team", inline=False)
+        embed.add_field(name="Entwickler", value="<@333006296611684352>", inline=False)
         embed.add_field(name="Status", value="Online", inline=False)
         embed.set_footer(text="Clash of Clans Bot - Immer für dich da!")
         await interaction.response.send_message(embed=embed)
