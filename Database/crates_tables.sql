@@ -1,1 +1,0 @@
-DESCRIBE sent_notifications;

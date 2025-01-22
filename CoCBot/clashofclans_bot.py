@@ -4,6 +4,15 @@ from discord import app_commands
 from dotenv import load_dotenv
 import os
 
+from CoCBot.cogs.verification import Verification
+import logging
+
+# Logging konfigurieren
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Umgebungsvariablen laden
+load_dotenv()
 # Umgebungsvariablen laden
 load_dotenv()
 
@@ -20,14 +29,24 @@ class ClashOfClansBot(commands.Bot):
 
     async def setup_hook(self):
         """Setup für den Bot."""
-        print("Clash of Clans Bot wird initialisiert...")
+        logger.info("Clash of Clans Bot wird initialisiert...")
+        await self.load_cogs()
+        synced = await self.tree.sync()
+        logger.info(f"Slash-Commands wurden synchronisiert: {len(synced)} Commands.")
 
-        # Beispiel: Einen Cog hinzufügen
-        await self.add_cog(GeneralCommands(self))
+    async def load_cogs(self):
+        """Cogs laden."""
+        cogs = ["cogs.verification", "cogs.privacy", "cogs.events", "cogs.general"]
+        for cog in cogs:
+            try:
+                await self.load_extension(cog)
+                logger.info(f"Cog {cog} erfolgreich geladen.")
+            except Exception as e:
+                logger.error(f"Fehler beim Laden von {cog}: {e}")
 
     async def on_ready(self):
         """Event: Bot ist bereit."""
-        print(f"{self.user} ist bereit und eingeloggt!")
+        logger.info(f"{self.user} ist bereit und eingeloggt!")
 
     def start_bot(self):
         """Bot starten."""
