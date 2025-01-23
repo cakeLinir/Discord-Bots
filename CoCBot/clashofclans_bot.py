@@ -58,7 +58,10 @@ class ClashOfClansBot(commands.Bot):
                     "cogs.events",
                     "cogs.membercheck",
                     "cogs.general",
-                    "cogs.embed"
+                    "cogs.embed",
+                    "cogs.ck",
+                    "cogs.cwl",
+                    "cogs.clanspiele"
                     ]:
             try:
                 await self.load_extension(cog)
