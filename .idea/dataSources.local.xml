@@ -13,9 +13,9 @@
       <schema-mapping>
         <introspection-scope>
           <node kind="schema">
+            <name qname="clash_bot" />
             <name qname="@" />
             <name qname="support_bot" />
-            <name qname="clash_bot" />
             <name qname="twitch_bot" />
           </node>
         </introspection-scope>

@@ -4,6 +4,12 @@ import os
 from CoCBot.clashofclans_bot import ClashOfClansBot
 from SupportBot.support_bot import SupportBot
 from TwitchNotifier.twitch_bot import TwitchBot
+import sys
+
+# Füge den spezifischen Cogs-Pfad zum Python-Pfad hinzu
+bot_cogs_path = os.path.join(os.path.dirname(__file__), "cogs")  # Passe "cogs" an, wenn dein Ordner anders heißt
+if bot_cogs_path not in sys.path:
+    sys.path.append(bot_cogs_path)
 
 # Umgebungsvariablen laden
 load_dotenv()

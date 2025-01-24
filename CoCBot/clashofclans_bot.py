@@ -1,18 +1,12 @@
 import discord
-import pymysql
 from discord.ext import commands
 from dotenv import load_dotenv
+import pymysql
 import os
 import logging
 
-# Logging konfigurieren
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Umgebungsvariablen laden
-load_dotenv()
-# Umgebungsvariablen laden
-load_dotenv()
 
 
 class ClashOfClansBot(commands.Bot):
@@ -21,19 +15,21 @@ class ClashOfClansBot(commands.Bot):
         intents.guilds = True
         intents.guild_messages = True
         intents.message_content = True  # Für App-Commands erforderlich
-
         super().__init__(command_prefix="/", intents=intents)
+
         self.token = token
-        self.db_connection = None  # Initialisiere die Datenbankverbindung
+        self.db_connection = None  # Datenbankverbindung
 
     def connect_to_database(self):
-        """Verbindet sich mit der Datenbank."""
+        """Verbindet den Bot mit der Datenbank."""
         try:
             self.db_connection = pymysql.connect(
                 host=os.getenv("DB_HOST"),
                 user=os.getenv("DB_USER"),
                 password=os.getenv("DB_PASSWORD"),
-                database=os.getenv("COC_DB_NAME")
+                database=os.getenv("COC_DB_NAME"),
+                charset='utf8mb4',
+                cursorclass=pymysql.cursors.DictCursor
             )
             logger.info("Erfolgreich mit der Datenbank verbunden.")
         except pymysql.MySQLError as e:
@@ -41,33 +37,17 @@ class ClashOfClansBot(commands.Bot):
             raise
 
     async def setup_hook(self):
-        """Setup für den Bot."""
-        print("Clash of Clans Bot wird initialisiert...")
-        # Verbinde zur Datenbank
-        self.connect_to_database()
-
-        # Cogs hinzufügen
-        await self.load_cogs()
-        synced = await self.tree.sync()
-        print(f"Slash-Commands wurden synchronisiert: {len(synced)} Commands.")
-
-    async def load_cogs(self):
-        """Cogs laden."""
-        for cog in ["cogs.verification",
-                    "cogs.privacy",
-                    "cogs.events",
-                    "cogs.membercheck",
-                    "cogs.general",
-                    "cogs.embed",
-                    "cogs.ck",
-                    "cogs.cwl",
-                    "cogs.clanspiele"
-                    ]:
-            try:
-                await self.load_extension(cog)
-                print(f"Cog {cog} erfolgreich geladen.")
-            except Exception as e:
-                print(f"Fehler beim Laden von {cog}: {e}")
+        """Lädt alle Cogs."""
+        self.connect_to_database()  # Datenbankverbindung herstellen
+        cogs_dir = os.path.join(os.path.dirname(__file__), "cogs")
+        for filename in os.listdir(cogs_dir):
+            if filename.endswith(".py") and not filename.startswith("_"):
+                cog_name = f"cogs.{filename[:-3]}"
+                try:
+                    await self.load_extension(cog_name)
+                    logger.info(f"Cog {cog_name} erfolgreich geladen.")
+                except Exception as e:
+                    logger.error(f"Fehler beim Laden von {cog_name}: {e}")
 
     async def close(self):
         """Schließt den Bot und die Datenbankverbindung."""
@@ -77,14 +57,14 @@ class ClashOfClansBot(commands.Bot):
         await super().close()
 
     def start_bot(self):
-        """Bot starten."""
+        """Startet den Bot."""
         self.run(self.token)
 
 
 if __name__ == "__main__":
-    load_dotenv()  # Umgebungsvariablen laden
+    load_dotenv()
     token = os.getenv("DISCORD_TOKEN_CLASH")
     if not token:
-        raise ValueError("Kein Token für den Clash of Clans Bot gefunden!")
+        raise ValueError("Discord-Token nicht gefunden. Bitte .env-Datei überprüfen.")
     bot = ClashOfClansBot(token)
     bot.start_bot()
