@@ -1015,7 +1015,7 @@ sys|schema||mysql.sys|localhost|TRIGGER|G</Grants>
       <CollationName>utf8mb4_0900_ai_ci</CollationName>
     </schema>
     <schema id="294" parent="1" name="clash_bot">
-      <LastIntrospectionLocalTimestamp>2025-01-24.23:25:41</LastIntrospectionLocalTimestamp>
+      <LastIntrospectionLocalTimestamp>2025-01-25.02:12:49</LastIntrospectionLocalTimestamp>
       <CollationName>utf8mb4_0900_ai_ci</CollationName>
     </schema>
     <user id="295" parent="1" name="mysql.infoschema">
@@ -1341,7 +1341,7 @@ sys|schema||mysql.sys|localhost|TRIGGER|G</Grants>
       <UnderlyingIndexName>twitch_username</UnderlyingIndexName>
     </key>
     <column id="366" parent="307" name="id">
-      <AutoIncrement>1</AutoIncrement>
+      <AutoIncrement>6</AutoIncrement>
       <NotNull>1</NotNull>
       <Position>1</Position>
       <StoredType>int|0s</StoredType>
@@ -1374,143 +1374,161 @@ sys|schema||mysql.sys|localhost|TRIGGER|G</Grants>
       <Position>7</Position>
       <StoredType>timestamp|0s</StoredType>
     </column>
-    <index id="373" parent="307" name="PRIMARY">
+    <column id="373" parent="307" name="sort_order">
+      <DefaultExpression>&apos;desc&apos;</DefaultExpression>
+      <Position>8</Position>
+      <StoredType>varchar(10)|0s</StoredType>
+    </column>
+    <column id="374" parent="307" name="current_page">
+      <DefaultExpression>1</DefaultExpression>
+      <Position>9</Position>
+      <StoredType>int|0s</StoredType>
+    </column>
+    <index id="375" parent="307" name="PRIMARY">
       <ColNames>id</ColNames>
       <Type>btree</Type>
       <Unique>1</Unique>
     </index>
-    <key id="374" parent="307" name="PRIMARY">
+    <key id="376" parent="307" name="PRIMARY">
       <NameSurrogate>1</NameSurrogate>
       <Primary>1</Primary>
       <UnderlyingIndexName>PRIMARY</UnderlyingIndexName>
     </key>
-    <column id="375" parent="308" name="id">
-      <AutoIncrement>1</AutoIncrement>
+    <column id="377" parent="308" name="id">
+      <AutoIncrement>2</AutoIncrement>
       <NotNull>1</NotNull>
       <Position>1</Position>
       <StoredType>int|0s</StoredType>
     </column>
-    <column id="376" parent="308" name="clanspiele_id">
+    <column id="378" parent="308" name="clanspiele_id">
       <NotNull>1</NotNull>
       <Position>2</Position>
       <StoredType>int|0s</StoredType>
     </column>
-    <column id="377" parent="308" name="discord_id">
+    <column id="379" parent="308" name="player_tag">
       <NotNull>1</NotNull>
       <Position>3</Position>
+      <StoredType>varchar(20)|0s</StoredType>
+    </column>
+    <column id="380" parent="308" name="coc_name">
+      <NotNull>1</NotNull>
+      <Position>4</Position>
+      <StoredType>varchar(50)|0s</StoredType>
+    </column>
+    <column id="381" parent="308" name="discord_id">
+      <Position>5</Position>
       <StoredType>bigint|0s</StoredType>
     </column>
-    <column id="378" parent="308" name="points">
+    <column id="382" parent="308" name="points">
       <DefaultExpression>0</DefaultExpression>
-      <Position>4</Position>
+      <Position>6</Position>
       <StoredType>int|0s</StoredType>
     </column>
-    <foreign-key id="379" parent="308" name="clanspiele_players_ibfk_1">
+    <foreign-key id="383" parent="308" name="clanspiele_players_ibfk_1">
       <ColNames>clanspiele_id</ColNames>
       <OnDelete>cascade</OnDelete>
       <RefColNames>id</RefColNames>
       <RefTableName>clanspiele</RefTableName>
     </foreign-key>
-    <index id="380" parent="308" name="PRIMARY">
+    <index id="384" parent="308" name="PRIMARY">
       <ColNames>id</ColNames>
       <Type>btree</Type>
       <Unique>1</Unique>
     </index>
-    <index id="381" parent="308" name="clanspiele_id">
+    <index id="385" parent="308" name="clanspiele_id">
       <ColNames>clanspiele_id</ColNames>
       <Type>btree</Type>
     </index>
-    <key id="382" parent="308" name="PRIMARY">
+    <key id="386" parent="308" name="PRIMARY">
       <NameSurrogate>1</NameSurrogate>
       <Primary>1</Primary>
       <UnderlyingIndexName>PRIMARY</UnderlyingIndexName>
     </key>
-    <column id="383" parent="309" name="id">
+    <column id="387" parent="309" name="id">
       <AutoIncrement>1</AutoIncrement>
       <NotNull>1</NotNull>
       <Position>1</Position>
       <StoredType>int|0s</StoredType>
     </column>
-    <column id="384" parent="309" name="event_type">
+    <column id="388" parent="309" name="event_type">
       <NotNull>1</NotNull>
       <Position>2</Position>
       <StoredType>varchar(50)|0s</StoredType>
     </column>
-    <column id="385" parent="309" name="channel_id">
+    <column id="389" parent="309" name="channel_id">
       <NotNull>1</NotNull>
       <Position>3</Position>
       <StoredType>bigint|0s</StoredType>
     </column>
-    <index id="386" parent="309" name="PRIMARY">
+    <index id="390" parent="309" name="PRIMARY">
       <ColNames>id</ColNames>
       <Type>btree</Type>
       <Unique>1</Unique>
     </index>
-    <index id="387" parent="309" name="event_type">
+    <index id="391" parent="309" name="event_type">
       <ColNames>event_type</ColNames>
       <Type>btree</Type>
       <Unique>1</Unique>
     </index>
-    <key id="388" parent="309" name="PRIMARY">
+    <key id="392" parent="309" name="PRIMARY">
       <NameSurrogate>1</NameSurrogate>
       <Primary>1</Primary>
       <UnderlyingIndexName>PRIMARY</UnderlyingIndexName>
     </key>
-    <key id="389" parent="309" name="event_type">
+    <key id="393" parent="309" name="event_type">
       <UnderlyingIndexName>event_type</UnderlyingIndexName>
     </key>
-    <column id="390" parent="310" name="id">
+    <column id="394" parent="310" name="id">
       <AutoIncrement>1</AutoIncrement>
       <NotNull>1</NotNull>
       <Position>1</Position>
       <StoredType>int|0s</StoredType>
     </column>
-    <column id="391" parent="310" name="discord_id">
-      <NotNull>1</NotNull>
+    <column id="395" parent="310" name="discord_id">
       <Position>2</Position>
       <StoredType>bigint|0s</StoredType>
     </column>
-    <column id="392" parent="310" name="player_tag">
+    <column id="396" parent="310" name="player_tag">
       <NotNull>1</NotNull>
       <Position>3</Position>
       <StoredType>varchar(20)|0s</StoredType>
     </column>
-    <column id="393" parent="310" name="role">
+    <column id="397" parent="310" name="role">
       <Position>4</Position>
       <StoredType>varchar(20)|0s</StoredType>
     </column>
-    <column id="394" parent="310" name="coc_name">
+    <column id="398" parent="310" name="coc_name">
       <NotNull>1</NotNull>
       <Position>5</Position>
       <StoredType>varchar(50)|0s</StoredType>
     </column>
-    <column id="395" parent="310" name="warn_time">
+    <column id="399" parent="310" name="warn_time">
       <DefaultExpression>0</DefaultExpression>
       <Position>6</Position>
       <StoredType>int|0s</StoredType>
     </column>
-    <column id="396" parent="310" name="created_at">
+    <column id="400" parent="310" name="created_at">
       <DefaultExpression>CURRENT_TIMESTAMP</DefaultExpression>
       <Position>7</Position>
       <StoredType>timestamp|0s</StoredType>
     </column>
-    <index id="397" parent="310" name="PRIMARY">
+    <index id="401" parent="310" name="PRIMARY">
       <ColNames>id</ColNames>
       <Type>btree</Type>
       <Unique>1</Unique>
     </index>
-    <index id="398" parent="310" name="discord_id">
-      <ColNames>discord_id</ColNames>
+    <index id="402" parent="310" name="player_tag">
+      <ColNames>player_tag</ColNames>
       <Type>btree</Type>
       <Unique>1</Unique>
     </index>
-    <key id="399" parent="310" name="PRIMARY">
+    <key id="403" parent="310" name="PRIMARY">
       <NameSurrogate>1</NameSurrogate>
       <Primary>1</Primary>
       <UnderlyingIndexName>PRIMARY</UnderlyingIndexName>
     </key>
-    <key id="400" parent="310" name="discord_id">
-      <UnderlyingIndexName>discord_id</UnderlyingIndexName>
+    <key id="404" parent="310" name="player_tag">
+      <UnderlyingIndexName>player_tag</UnderlyingIndexName>
     </key>
   </database-model>
 </dataSource>
