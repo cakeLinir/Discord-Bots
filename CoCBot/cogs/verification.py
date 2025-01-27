@@ -215,10 +215,11 @@ class Verification(commands.Cog):
             logger.error(f"Fehler beim Hinzufügen eines Spielers: {e}")
             await interaction.response.send_message("Fehler beim Hinzufügen des Spielers.", ephemeral=True)
 
-    @app_commands.command(name="post_existing_players", description="Postet bereits eingetragene Spieler in den Channel.")
+    @app_commands.command(name="post_existing_players",
+                          description="Postet bereits eingetragene Spieler in den Channel.")
     @app_commands.checks.has_permissions(administrator=True)
     async def post_existing_players(self, interaction: discord.Interaction):
-        """Postet alle verifizierten Spieler in den zugeordneten Channel."""
+        """Postet alle verifizierten Spieler in den zugeordneten Channel, nummeriert."""
         try:
             players = self.get_verified_players()
             if not players:
@@ -226,13 +227,14 @@ class Verification(commands.Cog):
                 return
 
             content = "**Verifizierte Spieler im Clan:**\n" + "\n".join(
-                [f"**{tag} {name}**" for tag, name in players]
+                [f"{index + 1}. **{tag} {name}**" for index, (tag, name) in enumerate(players)]
             )
             self.send_webhook_message(content)
             await interaction.response.send_message("Verifizierte Spieler wurden erfolgreich gepostet.", ephemeral=True)
         except Exception as e:
             logger.error(f"Fehler beim Posten der verifizierten Spieler: {e}")
             await interaction.response.send_message("Fehler beim Posten der Spieler.", ephemeral=True)
+
 
 async def setup(bot):
     await bot.add_cog(Verification(bot))
