@@ -13,6 +13,7 @@ logging.basicConfig(level=logging.INFO)
 
 API_BASE_URL = "https://api.clashofclans.com/v1"
 
+
 class CK(commands.Cog):
     """Cog zur Verwaltung der Clan-Kriege."""
 
@@ -57,7 +58,8 @@ class CK(commands.Cog):
         )
         embed.add_field(name="Clan Sterne", value=f"{clan['stars']}", inline=True)
         embed.add_field(name="Gegner Sterne", value=f"{opponent['stars']}", inline=True)
-        embed.add_field(name="Spieler pro Clan", value=f"{len(clan['members'])} vs {len(opponent['members'])}", inline=True)
+        embed.add_field(name="Spieler pro Clan", value=f"{len(clan['members'])} vs {len(opponent['members'])}",
+                        inline=True)
 
         # Hinzufügen der Spielerinformationen
         players_details = ""
@@ -83,9 +85,9 @@ class CK(commands.Cog):
 
         def check(reaction, user):
             return (
-                user == interaction.user
-                and str(reaction.emoji) in ["◀️", "▶️"]
-                and reaction.message.id == message.id
+                    user == interaction.user
+                    and str(reaction.emoji) in ["◀️", "▶️"]
+                    and reaction.message.id == message.id
             )
 
         while True:

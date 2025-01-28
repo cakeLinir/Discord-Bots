@@ -14,6 +14,7 @@ if bot_cogs_path not in sys.path:
 # Umgebungsvariablen laden
 load_dotenv()
 
+
 def get_bot_token(bot_name):
     """
     Hilfsfunktion, um Bot-Tokens aus den Umgebungsvariablen zu laden.
@@ -24,6 +25,7 @@ def get_bot_token(bot_name):
     if not token:
         raise ValueError(f"Bot-Token für {bot_name} nicht in der .env-Datei gefunden.")
     return token
+
 
 async def main():
     """
@@ -43,6 +45,7 @@ async def main():
         )
     except Exception as e:
         print(f"Fehler beim Starten der Bots: {e}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

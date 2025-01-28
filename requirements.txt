@@ -1,11 +1,7 @@
-discord.py
 requests
-tinydb
-python-dotenv
-aiomysql
-mysql
-mysql.connector
-PyMySQL
-aiohttp
-cryptography
 certifi
+asyncio
+PyMySQL
+python-dotenv
+cryptography
+aiohttp
