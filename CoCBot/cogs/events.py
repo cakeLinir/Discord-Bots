@@ -15,7 +15,7 @@ class Events(commands.Cog):
     @app_commands.command(name="set_event_channel", description="Setzt den Kanal für ein Event.")
     @app_commands.choices(event_type=[
         app_commands.Choice(name="Clanspiele", value="clanspiele"),
-        app_commands.Choice(name="Clan-Krieg", value="ck"),
+        app_commands.Choice(name="Clan-Krieg", value="clan-war"),
         app_commands.Choice(name="CWL", value="cwl")
     ])
     @app_commands.checks.has_permissions(administrator=True)

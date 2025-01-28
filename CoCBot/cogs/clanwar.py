@@ -60,6 +60,118 @@ class CK(commands.Cog):
             logger.error(f"Fehler bei der Verbindung zur API: {e}")
             return None
 
+    async def fetch_channel_by_id(self, channel_id: int) -> discord.TextChannel:
+        """Versucht, einen Kanal direkt über die Discord-API zu holen."""
+        try:
+            channel = await self.bot.fetch_channel(channel_id)
+            logger.info(f"Kanal direkt gefunden: {channel.name} (ID: {channel_id})")
+            return channel
+        except discord.NotFound:
+            logger.error(f"Kanal mit ID {channel_id} existiert nicht.")
+        except discord.Forbidden:
+            logger.error(f"Zugriff auf Kanal mit ID {channel_id} verweigert.")
+        except Exception as e:
+            logger.error(f"Fehler beim Abrufen des Kanals mit ID {channel_id}: {e}")
+        return None
+
+    async def get_event_channel(self) -> discord.TextChannel:
+        """Holt den Event-Channel für den Clan-Krieg aus der Datenbank."""
+        try:
+            cursor = self.bot.db_connection.cursor()
+            cursor.execute("""
+                SELECT channel_id FROM event_channels WHERE event_type = 'clan-war'
+            """)
+            result = cursor.fetchone()
+            if result:
+                channel_id = result[0]
+                logger.info(f"Abgerufene Kanal-ID aus der Datenbank: {channel_id}")
+                channel = self.bot.get_channel(channel_id)
+                if not channel:  # Falls nicht im Cache, versuche, ihn direkt von der API zu holen
+                    channel = await self.bot.fetch_channel(channel_id)
+                    logger.info(f"Kanal direkt über API abgerufen: {channel.name} (ID: {channel.id})")
+                return channel
+        except Exception as e:
+            logger.error(f"Fehler beim Abrufen des Event-Channels: {e}")
+        return None
+
+    def get_stored_embed_data(self) -> dict:
+        """Holt gespeicherte Embed-Daten aus der Datenbank."""
+        try:
+            cursor = self.bot.db_connection.cursor()
+            cursor.execute("""
+                SELECT message_id, channel_id FROM clanwar_embed LIMIT 1
+            """)
+            result = cursor.fetchone()
+            return {"message_id": result[0], "channel_id": result[1]} if result else None
+        except Exception as e:
+            logger.error(f"Fehler beim Abrufen der Embed-Daten: {e}")
+        return None
+
+    def save_embed_data(self, message_id: int, channel_id: int):
+        """Speichert die Embed-Daten in der Datenbank."""
+        try:
+            cursor = self.bot.db_connection.cursor()
+            cursor.execute("""
+                INSERT INTO clanwar_embed (message_id, channel_id)
+                VALUES (%s, %s)
+                ON DUPLICATE KEY UPDATE message_id = VALUES(message_id), channel_id = VALUES(channel_id)
+            """, (message_id, channel_id))
+            self.bot.db_connection.commit()
+        except Exception as e:
+            logger.error(f"Fehler beim Speichern der Embed-Daten: {e}")
+
+    async def post_or_update_war_embed(self):
+        """Postet oder aktualisiert das Embed für den aktuellen Clan-Krieg."""
+        try:
+            # Clan-Tag abrufen
+            clan_tag = os.getenv("CLAN_TAG")
+            if not clan_tag:
+                logger.error("Clan-Tag ist nicht gesetzt.")
+                return
+
+            # Clan-Kriegsdaten abrufen
+            war_data = self.fetch_current_war(clan_tag)
+            if not war_data or war_data.get("state") not in ["inWar", "preparation"]:
+                logger.info("Kein laufender oder vorbereitender Clan-Krieg gefunden.")
+                return
+
+            # Beschreibung basierend auf dem Krieg-Zustand
+            description = (
+                "Der Clan-Krieg befindet sich in der **Vorbereitungsphase**. Spieler können Truppen in die Kriegsburgen spenden."
+                if war_data.get("state") == "preparation"
+                else "Der Clan-Krieg ist **aktiv**. Angriffe können durchgeführt werden."
+            )
+
+            # Event-Channel abrufen
+            event_channel = await self.get_event_channel()
+            if not event_channel:
+                logger.error("Event-Channel für Clan-Krieg nicht gefunden.")
+                return
+            logger.info(f"Event-Channel bereit: {event_channel.name} (ID: {event_channel.id})")
+
+            # Embed erstellen
+            embed = self.build_war_embed(war_data, page=1, description=description)
+
+            # Überprüfen, ob ein Embed bereits existiert
+            stored_embed_data = self.get_stored_embed_data()
+            if stored_embed_data:
+                try:
+                    # Embed aktualisieren
+                    channel = await self.bot.fetch_channel(stored_embed_data["channel_id"])
+                    message = await channel.fetch_message(stored_embed_data["message_id"])
+                    await message.edit(embed=embed)
+                    logger.info("Clan-Kriegs-Embed erfolgreich aktualisiert.")
+                    return
+                except discord.NotFound:
+                    logger.warning("Vorheriges Embed nicht gefunden. Neues Embed wird erstellt.")
+
+            # Neues Embed posten
+            message = await event_channel.send(embed=embed)
+            self.save_embed_data(message.id, event_channel.id)
+            logger.info("Neues Clan-Kriegs-Embed gepostet und gespeichert.")
+        except Exception as e:
+            logger.error(f"Fehler beim Posten/Aktualisieren des Clan-Kriegs-Embeds: {e}")
+
     @staticmethod
     def shorten_text(text: str, max_length: int = 1024) -> str:
         """Kürzt einen Text auf die maximale Länge."""
@@ -158,6 +270,20 @@ class CK(commands.Cog):
         except Exception as e:
             logger.error(f"Fehler beim Abrufen der privaten Clan-Krieg-Statistiken: {e}")
             await interaction.response.send_message("Fehler beim Abrufen der Statistiken.", ephemeral=True)
+
+    @app_commands.command(name="ck_refresh", description="Aktualisiert das Clan-Kriegs-Embed manuell.")
+    async def ck_refresh(self, interaction: discord.Interaction):
+        """Manuelles Aktualisieren des Clan-Kriegs-Embeds."""
+        try:
+            await self.post_or_update_war_embed()
+            await interaction.response.send_message("Clan-Kriegs-Embed wurde aktualisiert.", ephemeral=True)
+        except Exception as e:
+            logger.error(f"Fehler beim Aktualisieren des Clan-Kriegs-Embeds: {e}")
+            await interaction.response.send_message("Fehler beim Aktualisieren des Embeds.", ephemeral=True)
+
+    async def cog_load(self):
+        """Automatisch ausführen beim Laden des Cogs."""
+        await self.post_or_update_war_embed()
 
 async def setup(bot):
     await bot.add_cog(CK(bot))
