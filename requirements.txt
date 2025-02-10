@@ -6,3 +6,4 @@ python-dotenv
 cryptography
 aiohttp
 discord.py
+db

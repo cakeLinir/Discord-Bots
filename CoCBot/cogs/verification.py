@@ -1,239 +1,149 @@
-import certifi
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
-from dotenv import load_dotenv
 import os
-import pymysql
-import logging
-from cryptography.fernet import Fernet
 import requests
+import logging
+import sqlite3
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
+API_BASE_URL = "https://api.clashofclans.com/v1"
+CLAN_TAG = os.getenv("CLAN_TAG")
+COC_API_TOKEN = os.getenv("COC_API_TOKEN")
+CLAN_ROLE_NAME = "Clan-Mitglied"
+GUILD_ID = int(os.getenv("CLASH_GUILD_ID"))  # Guild ID aus .env
 
 class Verification(commands.Cog):
+    """Verifizierungssystem für Clan-Mitglieder."""
+
     def __init__(self, bot):
         self.bot = bot
-        self.api_base_url = "https://api.clashofclans.com/v1"
-        self.coc_api_token = os.getenv("COC_API_TOKEN")
-        self.webhook_url = os.getenv("WEBHOOK_URL")
-        if not self.coc_api_token:
-            raise ValueError("COC_API_TOKEN nicht in Umgebungsvariablen gesetzt.")
-        if not self.webhook_url:
-            raise ValueError("WEBHOOK_URL nicht in Umgebungsvariablen gesetzt.")
-        self.db_connection = self.bot.db_connection
-        self.update_verified_players.start()
+        self.verify_clan_members.start()  # Automatische Überprüfung starten
 
-    def get_headers(self):
-        """Gibt die Header für die Clash-of-Clans-API zurück."""
-        return {"Authorization": f"Bearer {self.coc_api_token}"}
+    def cog_unload(self):
+        """Stoppt die Überprüfung bei Cog-Unload."""
+        self.verify_clan_members.cancel()
 
-    def get_verified_players(self):
-        """Holt die verifizierten Spieler aus der Datenbank."""
+    def get_headers(self) -> dict:
+        """Gibt die Header für die Clash of Clans API zurück."""
+        return {"Authorization": f"Bearer {COC_API_TOKEN}"}
+
+    def fetch_player_data(self, player_tag: str) -> dict:
+        """Holt die Spieler-Daten von der Clash of Clans API."""
         try:
-            cursor = self.db_connection.cursor()
-            cursor.execute("SELECT player_tag, coc_name FROM users")
-            result = cursor.fetchall()
-            cursor.close()
-            return result
-        except Exception as e:
-            logger.error(f"Fehler beim Abrufen der verifizierten Spieler: {e}")
-            return []
-
-    def send_webhook_message(self, content: str):
-        """Sendet eine Nachricht an den Webhook."""
-        try:
-            response = requests.post(self.webhook_url, json={"content": content})
-            if response.status_code != 204:
-                logger.error(f"Fehler beim Senden an den Webhook: {response.text}")
-        except Exception as e:
-            logger.error(f"Fehler beim Senden der Webhook-Nachricht: {e}")
-
-    def get_player_data(self, player_tag: str) -> dict:
-        """Holt die Spieler-Daten über die Clash of Clans API."""
-        try:
-            url = f"https://api.clashofclans.com/v1/players/{player_tag.replace('#', '%23')}"
-            headers = {"Authorization": f"Bearer {os.getenv('COC_API_TOKEN')}"}
-            response = requests.get(url, headers=headers, verify=certifi.where())
-            if response.status_code != 200:
-                logger.error(f"Fehler beim Abrufen der Spieler-Daten: {response.status_code} - {response.text}")
-                return None
-            return response.json()
+            url = f"{API_BASE_URL}/players/{player_tag.replace('#', '%23')}"
+            response = requests.get(url, headers=self.get_headers())
+            if response.status_code == 200:
+                return response.json()
+            logger.error(f"Fehler beim Abrufen der Spieler-Daten: {response.status_code} - {response.text}")
+            return None
         except requests.exceptions.RequestException as e:
             logger.error(f"Fehler bei der Verbindung zur API: {e}")
             return None
-        except Exception as e:
-            logger.error(f"Unbekannter Fehler beim Abrufen der Spieler-Daten: {e}")
-            return None
 
-    def get_clan_data(self, clan_tag):
-        """Holt die Clan-Daten von der Clash-of-Clans-API."""
-        url = f"{self.api_base_url}/clans/{clan_tag.replace('#', '%23')}"
+    def fetch_clan_members(self) -> list:
+        """Holt die aktuellen Clan-Mitglieder von der Clash of Clans API."""
         try:
+            url = f"{API_BASE_URL}/clans/{CLAN_TAG.replace('#', '%23')}"
             response = requests.get(url, headers=self.get_headers())
-            if response.status_code != 200:
-                logger.error(f"Fehler beim Abrufen der Clan-Daten: {response.text}")
-                return None
-            return response.json()
-        except Exception as e:
-            logger.error(f"Fehler beim Abrufen der Clan-Daten: {e}")
-            return None
+            if response.status_code == 200:
+                return [member["tag"] for member in response.json().get("memberList", [])]
+            logger.error(f"Fehler beim Abrufen der Clan-Daten: {response.status_code} - {response.text}")
+            return []
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Fehler bei der Verbindung zur API: {e}")
+            return []
 
-    @tasks.loop(hours=1)
-    async def update_verified_players(self):
-        """Aktualisiert die Liste der verifizierten Spieler."""
-        required_clan_tag = os.getenv("REQUIRED_CLAN_TAG")
-        if not required_clan_tag:
-            logger.error("REQUIRED_CLAN_TAG nicht in Umgebungsvariablen gesetzt.")
-            return
-
-        # Clan-Daten abrufen
-        url = f"{self.api_base_url}/clans/{required_clan_tag.replace('#', '%23')}/members"
-        response = requests.get(url, headers=self.get_headers(), verify=certifi.where())
-        if response.status_code != 200:
-            logger.error(f"Fehler beim Abrufen der Clan-Mitglieder: {response.text}")
-            return
-
-        clan_members = {member["tag"]: member["name"] for member in response.json().get("items", [])}
-
-        # Spieler in der Datenbank aktualisieren
-        verified_players = self.get_verified_players()
-        verified_tags = {player[0] for player in verified_players}
-
-        # Entferne Spieler, die nicht mehr im Clan sind
-        removed_players = [player for player in verified_players if player[0] not in clan_members]
-        for player_tag, coc_name in removed_players:
-            cursor = self.db_connection.cursor()
-            cursor.execute("DELETE FROM users WHERE player_tag = %s", (player_tag,))
-            self.db_connection.commit()
-            cursor.close()
-            self.send_webhook_message(f"**{player_tag} {coc_name}** wurde aus dem Clan entfernt.")
-
-        # Füge neue Spieler hinzu
-        for player_tag, coc_name in clan_members.items():
-            if player_tag not in verified_tags:
-                cursor = self.db_connection.cursor()
-                cursor.execute("""
-                        INSERT INTO users (player_tag, coc_name, discord_id)
-                        VALUES (%s, %s, NULL)
-                    """, (player_tag, coc_name))
-                self.db_connection.commit()
-                cursor.close()
-                self.send_webhook_message(f"**{player_tag} {coc_name}** wurde dem Clan hinzugefügt.")
-
-    @app_commands.command(name="verify", description="Verifiziert einen Nutzer basierend auf seinem Spielertag.")
+    @app_commands.command(name="verify", description="Verifiziert einen Spieler basierend auf seinem Spielertag.")
+    @app_commands.guilds(GUILD_ID)
     async def verify(self, interaction: discord.Interaction, player_tag: str):
-        """Verifiziert einen Nutzer basierend auf seinem Spielertag."""
+        """Verifiziert einen Spieler basierend auf seinem Spielertag."""
         await interaction.response.defer(ephemeral=True)
 
-        player_data = self.get_player_data(player_tag)
+        player_data = self.fetch_player_data(player_tag)
         if not player_data:
             await interaction.followup.send("Spieler-Daten konnten nicht abgerufen werden.", ephemeral=True)
             return
 
-        coc_name = player_data.get("name", "Unbekannt")
+        # Überprüfen, ob der Spieler im Clan ist
         clan_data = player_data.get("clan", {})
-        clan_tag = clan_data.get("tag")
-        clan_name = clan_data.get("name")
-
-        if not clan_tag:
-            await interaction.followup.send("Spieler gehört keinem Clan an.", ephemeral=True)
+        if clan_data.get("tag") != CLAN_TAG:
+            await interaction.followup.send("Dieser Spieler ist nicht im Clan.", ephemeral=True)
             return
 
-        required_clan_tag = os.getenv("REQUIRED_CLAN_TAG")
-        if required_clan_tag and clan_tag != required_clan_tag:
-            await interaction.followup.send(
-                f"Spieler ist nicht im erforderlichen Clan ({required_clan_tag}).", ephemeral=True
-            )
-            return
-
+        # Spieler in die Datenbank eintragen oder aktualisieren
         try:
-            cursor = self.db_connection.cursor()
-            cursor.execute("""
-                    INSERT INTO users (discord_id, player_tag, coc_name, role)
-                    VALUES (%s, %s, %s, %s)
-                    ON DUPLICATE KEY UPDATE coc_name = VALUES(coc_name), role = VALUES(role)
-                """, (interaction.user.id, player_tag, coc_name, player_data.get("role")))
-            self.db_connection.commit()
-            cursor.close()
-        except Exception as e:
-            logger.error(f"Fehler beim Aktualisieren der Datenbank: {e}")
-            await interaction.followup.send("Datenbank-Fehler beim Verifizieren.", ephemeral=True)
-            return
-
-        self.send_webhook_message(f"**{player_tag} {coc_name}** wurde erfolgreich verifiziert.")
-        await interaction.followup.send(
-            f"Erfolgreich als **{coc_name}** verifiziert. Spieler ist im Clan **{clan_name}**.", ephemeral=True
-        )
-
-    @app_commands.command(name="add_player", description="Fügt einen neuen Spieler manuell zur Datenbank hinzu.")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def add_player(self, interaction: discord.Interaction, player_tag: str):
-        """Fügt einen neuen Spieler basierend auf dem Spieler-Tag zur Datenbank hinzu."""
-        try:
-            # Überprüfen, ob der Spieler bereits existiert
-            cursor = self.bot.db_connection.cursor()
-            cursor.execute("""
-                SELECT * FROM users WHERE player_tag = %s
-            """, (player_tag,))
-            existing_player = cursor.fetchone()
-
-            if existing_player:
-                await interaction.response.send_message(f"Spieler mit dem Tag {player_tag} existiert bereits.",
-                                                        ephemeral=True)
-                return
-
-            # Spielername über die API abrufen
-            player_data = self.get_player_data(player_tag)
-            if not player_data:
-                await interaction.response.send_message(
-                    f"Spieler mit dem Tag {player_tag} konnte nicht gefunden werden.", ephemeral=True
+            with sqlite3.connect("clash_bot.db") as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO verified_players (discord_id, player_tag, coc_name)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(discord_id) 
+                    DO UPDATE SET player_tag=excluded.player_tag, coc_name=excluded.coc_name
+                    """,
+                    (interaction.user.id, player_tag, player_data.get("name")),
                 )
-                return
-
-            coc_name = player_data.get("name")
-            if not coc_name:
-                await interaction.response.send_message(
-                    f"Spielername für den Tag {player_tag} konnte nicht abgerufen werden.", ephemeral=True
-                )
-                return
-
-            # Spieler in die Datenbank eintragen
-            cursor.execute("""
-                INSERT INTO users (player_tag, coc_name)
-                VALUES (%s, %s)
-            """, (player_tag, coc_name))
-            self.bot.db_connection.commit()
-            cursor.close()
-
-            await interaction.response.send_message(
-                f"Spieler **{coc_name}** mit Tag {player_tag} erfolgreich hinzugefügt.", ephemeral=True
-            )
+                conn.commit()
         except Exception as e:
-            logger.error(f"Fehler beim Hinzufügen eines Spielers: {e}")
-            await interaction.response.send_message("Fehler beim Hinzufügen des Spielers.", ephemeral=True)
+            logger.error(f"Fehler beim Speichern des Spielers in der Datenbank: {e}")
+            await interaction.followup.send("Fehler beim Speichern des Spielers.", ephemeral=True)
+            return
 
-    @app_commands.command(name="post_existing_players",
-                          description="Postet bereits eingetragene Spieler in den Channel.")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def post_existing_players(self, interaction: discord.Interaction):
-        """Postet alle verifizierten Spieler in den zugeordneten Channel, nummeriert."""
+        # Rolle zuweisen
+        role = discord.utils.get(interaction.guild.roles, name=CLAN_ROLE_NAME)
+        if role:
+            await interaction.user.add_roles(role)
+            await interaction.followup.send(f"Du wurdest als **{player_data.get('name')}** verifiziert.", ephemeral=True)
+        else:
+            await interaction.followup.send("Rolle für Clan-Mitglieder nicht gefunden. Bitte kontaktiere einen Admin.", ephemeral=True)
+
+    @tasks.loop(hours=24)
+    async def verify_clan_members(self):
+        """Überprüft täglich, ob verifizierte Mitglieder noch im Clan sind."""
+        clan_members = self.fetch_clan_members()
+        if not clan_members:
+            logger.warning("Clan-Mitglieder konnten nicht abgerufen werden.")
+            return
+
         try:
-            players = self.get_verified_players()
-            if not players:
-                await interaction.response.send_message("Keine verifizierten Spieler gefunden.", ephemeral=True)
-                return
+            with sqlite3.connect("clash_bot.db") as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT discord_id, player_tag FROM verified_players")
+                verified_players = cursor.fetchall()
 
-            content = "**Verifizierte Spieler im Clan:**\n" + "\n".join(
-                [f"{index + 1}. **{tag} {name}**" for index, (tag, name) in enumerate(players)]
-            )
-            self.send_webhook_message(content)
-            await interaction.response.send_message("Verifizierte Spieler wurden erfolgreich gepostet.", ephemeral=True)
+                for discord_id, player_tag in verified_players:
+                    member = self.bot.get_guild(GUILD_ID).get_member(discord_id)
+                    if not member:
+                        continue
+
+                    # Entferne die Rolle, wenn der Spieler nicht mehr im Clan ist
+                    if player_tag not in clan_members:
+                        role = discord.utils.get(member.guild.roles, name=CLAN_ROLE_NAME)
+                        if role and role in member.roles:
+                            await member.remove_roles(role)
+                            logger.info(f"Rolle für {member} entfernt (nicht mehr im Clan).")
+
+                        # Spieler aus der Datenbank entfernen
+                        cursor.execute("DELETE FROM verified_players WHERE player_tag = ?", (player_tag,))
+                        conn.commit()
+                        logger.info(f"{player_tag} wurde aus der Datenbank entfernt.")
+
         except Exception as e:
-            logger.error(f"Fehler beim Posten der verifizierten Spieler: {e}")
-            await interaction.response.send_message("Fehler beim Posten der Spieler.", ephemeral=True)
+            logger.error(f"Fehler bei der Überprüfung der Clan-Mitglieder: {e}")
+
+    @app_commands.command(name="check_clan", description="Überprüft alle verifizierten Spieler auf Mitgliedschaft.")
+    @app_commands.guilds(GUILD_ID)
+    async def check_clan(self, interaction: discord.Interaction):
+        """Manuelle Überprüfung aller verifizierten Spieler."""
+        await interaction.response.defer(ephemeral=True)
+        await self.verify_clan_members()
+        await interaction.followup.send("Überprüfung abgeschlossen.", ephemeral=True)
+
+    async def cog_load(self):
+        """Automatische Überprüfung starten, wenn das Cog geladen wird."""
+        self.verify_clan_members.start()
 
 
 async def setup(bot):

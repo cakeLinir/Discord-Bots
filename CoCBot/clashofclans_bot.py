@@ -1,76 +1,120 @@
-import discord
-import pymysql
-from discord.ext import commands
-from dotenv import load_dotenv
 import os
 import logging
+import sqlite3
+import asyncio
+import discord
+from discord.ext import commands
+from dotenv import load_dotenv
 
-# Logging konfigurieren
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Log-Konfiguration
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler("clashofclans_bot.log"),
+        logging.StreamHandler()
+    ]
+)
 
-# Umgebungsvariablen laden
+# .env-Datei laden
 load_dotenv()
 
+# Discord-Bot-Konfiguration
+BOT_TOKEN = os.getenv("DISCORD_TOKEN_CLASH")
+COMMAND_PREFIX = "/"  # Standard-Präfix
+INTENTS = discord.Intents.default()
+INTENTS.messages = True
+INTENTS.message_content = True
 
-class ClashOfClansBot(commands.Bot):
-    def __init__(self, token, command_prefix):
-        intents = discord.Intents.default()
-        intents.guilds = True
-        intents.guild_messages = True
-        intents.message_content = True  # Für App-Commands erforderlich
-        super().__init__(command_prefix=command_prefix, intents=intents)
-        self.token = token
-        self.db_connection = None  # Initialisiere die Datenbankverbindung
+# SQLite-Datenbank
+DATABASE_FILE = "clash_bot.db"
 
-    def connect_to_database(self):
-        """Verbindet sich mit der Datenbank."""
-        try:
-            self.db_connection = pymysql.connect(
-                host=os.getenv("DB_HOST"),
-                user=os.getenv("DB_USER"),
-                password=os.getenv("DB_PASSWORD"),
-                database=os.getenv("COC_DB_NAME")
+
+def initialize_database():
+    """Initialisiert die SQLite-Datenbank."""
+    try:
+        connection = sqlite3.connect(DATABASE_FILE)
+        cursor = connection.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS event_channels (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT UNIQUE NOT NULL,
+                channel_id INTEGER NOT NULL
             )
-            logger.info("Erfolgreich mit der Datenbank verbunden.")
-        except pymysql.MySQLError as e:
-            logger.error(f"Fehler bei der Verbindung zur Datenbank: {e}")
-            raise
+        """)
+        connection.commit()
+        connection.close()
+        logging.info("Datenbank erfolgreich initialisiert.")
+    except sqlite3.Error as e:
+        logging.error(f"Fehler bei der Initialisierung der Datenbank: {e}")
+
+
+class ClashBot(commands.Bot):
+    """Erweiterter Bot für Clash of Clans."""
+
+    def __init__(self, command_prefix, intents, database_file):
+        super().__init__(command_prefix=command_prefix, intents=intents)
+        self.database_file = database_file
+        self.cogs_list = [
+            "cogs.clanspiele",
+            "cogs.clanwar",
+            "cogs.clancapital",
+            "cogs.verification",
+            "cogs.general"
+        ]
 
     async def setup_hook(self):
-        """Initialisiert den Bot und synchronisiert Befehle."""
-        self.connect_to_database()  # Stelle die Datenbankverbindung her
-        cogs_dir = os.path.join(os.path.dirname(__file__), "cogs")
-        for filename in os.listdir(cogs_dir):
-            if filename.endswith(".py") and not filename.startswith("_"):
-                cog_name = f"cogs.{filename[:-3]}"  # Entfernt die .py-Erweiterung
-                try:
-                    await self.load_extension(cog_name)
-                    print(f"Cog {cog_name} erfolgreich geladen.")
-                except Exception as e:
-                    print(f"Fehler beim Laden von {cog_name}: {e}")
+        """Setup-Hook für den Bot."""
+        loaded_cogs = []
+        failed_cogs = []
 
-        # Synchronisiere App-Commands
-        synced = await self.tree.sync()
-        print(f"Synchronisierte {len(synced)} Befehle:")
-        for command in synced:
-            print(f" - {command.name}")
+        # Cogs laden
+        for cog in self.cogs_list:
+            try:
+                await self.load_extension(cog)
+                loaded_cogs.append(cog)
+            except Exception as e:
+                failed_cogs.append((cog, str(e)))
+                logging.error(f"Fehler beim Laden des Cogs {cog}: {e}")
 
-    async def close(self):
-        """Schließt den Bot und die Datenbankverbindung."""
-        if self.db_connection:
-            self.db_connection.close()
-            logger.info("Datenbankverbindung geschlossen.")
-        await super().close()
+        # Zusammenfassung der geladenen Cogs
+        if loaded_cogs:
+            logging.info(f"{len(loaded_cogs)} Cogs erfolgreich geladen: {', '.join(loaded_cogs)}")
+        if failed_cogs:
+            for cog, error in failed_cogs:
+                logging.error(f"Cog {cog} konnte nicht geladen werden: {error}")
 
-    def start_bot(self):
-        """Bot starten."""
-        self.run(self.token)
+        # Command-Tree synchronisieren
+        try:
+            synced_commands = await self.tree.sync()
+            logging.info(f"{len(synced_commands)} Befehle erfolgreich synchronisiert:")
+            for command in synced_commands:
+                logging.info(f" - {command.name} ({command.description})")
+        except Exception as e:
+            logging.error(f"Fehler beim Synchronisieren des Command-Trees: {e}")
+
+    async def on_ready(self):
+        """Event: Bot ist bereit."""
+        logging.info(f"Eingeloggt als {self.user} (ID: {self.user.id})")
+        logging.info("Bot ist bereit und läuft...")
+
+
+async def main():
+    """Startet den Bot."""
+    logging.info("Bot wird gestartet...")
+    initialize_database()
+
+    bot = ClashBot(command_prefix=COMMAND_PREFIX, intents=INTENTS, database_file=DATABASE_FILE)
+
+    if not BOT_TOKEN:
+        logging.error("DISCORD_BOT_TOKEN ist nicht gesetzt.")
+        exit(1)
+
+    try:
+        await bot.start(BOT_TOKEN)
+    except Exception as e:
+        logging.error(f"Fehler beim Starten des Bots: {e}")
 
 
 if __name__ == "__main__":
-    token = os.getenv("DISCORD_TOKEN_CLASH")
-    if not token:
-        raise ValueError("Kein Token für den Clash of Clans Bot gefunden!")
-    bot = ClashOfClansBot(token, command_prefix="/")
-    bot.start_bot()
+    asyncio.run(main())

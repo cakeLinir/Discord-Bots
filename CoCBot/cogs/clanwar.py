@@ -47,6 +47,35 @@ class CK(commands.Cog):
         """Headers für die Clash of Clans API."""
         return {"Authorization": f"Bearer {self.coc_api_token}"}
 
+    def fetch_current_event(self, clan_tag: str, is_cwl: bool = False) -> dict:
+        """
+        Holt die aktuellen Daten für Clan-Krieg oder CWL basierend auf dem Parameter is_cwl.
+
+        :param clan_tag: Das Clan-Tag des Clans.
+        :param is_cwl: Wenn True, werden die CWL-Daten abgerufen. Ansonsten die CW-Daten.
+        :return: Ein Dictionary mit den abgerufenen Daten oder None bei einem Fehler.
+        """
+        try:
+            # URL basierend auf is_cwl bestimmen
+            if is_cwl:
+                url = f"{API_BASE_URL}/clans/{clan_tag.replace('#', '%23')}/currentwarleaguegroup"
+                event_type = "CWL"
+            else:
+                url = f"{API_BASE_URL}/clans/{clan_tag.replace('#', '%23')}/currentwar"
+                event_type = "Clan-Krieg"
+
+            # Anfrage an die API senden
+            response = requests.get(url, headers=self.get_headers(), verify=certifi.where())
+            if response.status_code == 200:
+                logger.info(f"{event_type}-Daten erfolgreich abgerufen.")
+                return response.json()
+
+            logger.error(f"Fehler beim Abrufen der {event_type}-Daten: {response.status_code} - {response.text}")
+            return None
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Fehler bei der Verbindung zur API: {e}")
+            return None
+
     def fetch_current_war(self, clan_tag: str) -> dict:
         """Holt die aktuellen Clan-Kriegsdaten von der API."""
         try:
@@ -75,23 +104,39 @@ class CK(commands.Cog):
         return None
 
     async def get_event_channel(self) -> discord.TextChannel:
-        """Holt den Event-Channel für den Clan-Krieg aus der Datenbank."""
+        """Holt den Event-Channel aus der Datenbank und versucht, ihn über die API abzurufen."""
         try:
             cursor = self.bot.db_connection.cursor()
-            cursor.execute("""
-                SELECT channel_id FROM event_channels WHERE event_type = 'clan-war'
-            """)
+            cursor.execute("SELECT channel_id FROM event_channels WHERE event_type = 'clan-war'")
             result = cursor.fetchone()
             if result:
-                channel_id = result[0]
+                channel_id = int(result[0])
                 logger.info(f"Abgerufene Kanal-ID aus der Datenbank: {channel_id}")
+
+                # Prüfen, ob der Kanal im Cache verfügbar ist
                 channel = self.bot.get_channel(channel_id)
-                if not channel:  # Falls nicht im Cache, versuche, ihn direkt von der API zu holen
-                    channel = await self.bot.fetch_channel(channel_id)
-                    logger.info(f"Kanal direkt über API abgerufen: {channel.name} (ID: {channel.id})")
-                return channel
+                if channel:
+                    logger.info(f"Kanal direkt aus Cache gefunden: {channel.name} (ID: {channel_id})")
+                    return channel
+
+                # Falls nicht im Cache, versuche den Kanal über die API zu laden
+                logger.warning(f"Kanal mit ID {channel_id} nicht im Cache. Versuche, ihn über die API abzurufen.")
+                for guild in self.bot.guilds:
+                    try:
+                        fetched_channel = await guild.fetch_channel(channel_id)
+                        if fetched_channel:
+                            logger.info(
+                                f"Kanal erfolgreich über API gefunden: {fetched_channel.name} (ID: {channel_id})")
+                            return fetched_channel
+                    except discord.NotFound:
+                        logger.warning(f"Kanal mit ID {channel_id} in {guild.name} nicht gefunden.")
+                    except discord.Forbidden:
+                        logger.error(
+                            f"Bot hat keine Berechtigung, Kanal mit ID {channel_id} in {guild.name} abzurufen.")
+                logger.error(f"Kanal mit ID {channel_id} konnte nicht gefunden werden.")
         except Exception as e:
             logger.error(f"Fehler beim Abrufen des Event-Channels: {e}")
+
         return None
 
     def get_stored_embed_data(self) -> dict:
@@ -130,9 +175,15 @@ class CK(commands.Cog):
                 return
 
             # Clan-Kriegsdaten abrufen
-            war_data = self.fetch_current_war(clan_tag)
+            war_data = self.fetch_current_event(clan_tag, is_cwl=False)
             if not war_data or war_data.get("state") not in ["inWar", "preparation"]:
                 logger.info("Kein laufender oder vorbereitender Clan-Krieg gefunden.")
+                return
+
+            # Event-Channel abrufen
+            event_channel = await self.get_event_channel()
+            if not event_channel:
+                logger.error("Event-Channel für Clan-Krieg nicht gefunden.")
                 return
 
             # Beschreibung basierend auf dem Krieg-Zustand
@@ -142,13 +193,6 @@ class CK(commands.Cog):
                 else "Der Clan-Krieg ist **aktiv**. Angriffe können durchgeführt werden."
             )
 
-            # Event-Channel abrufen
-            event_channel = await self.get_event_channel()
-            if not event_channel:
-                logger.error("Event-Channel für Clan-Krieg nicht gefunden.")
-                return
-            logger.info(f"Event-Channel bereit: {event_channel.name} (ID: {event_channel.id})")
-
             # Embed erstellen
             embed = self.build_war_embed(war_data, page=1, description=description)
 
@@ -156,12 +200,28 @@ class CK(commands.Cog):
             stored_embed_data = self.get_stored_embed_data()
             if stored_embed_data:
                 try:
-                    # Embed aktualisieren
-                    channel = await self.bot.fetch_channel(stored_embed_data["channel_id"])
+                    # Kanal abrufen (Cache oder API)
+                    channel = self.bot.get_channel(stored_embed_data["channel_id"])
+                    if channel is None:
+                        # Kanal über API laden, falls nicht im Cache
+                        for guild in self.bot.guilds:
+                            try:
+                                channel = await guild.fetch_channel(stored_embed_data["channel_id"])
+                                if channel:
+                                    logger.info(f"Kanal über API abgerufen: {channel.name} (ID: {channel.id})")
+                                    break
+                            except discord.NotFound:
+                                continue
+                    if channel is None:
+                        logger.error(f"Kanal mit ID {stored_embed_data['channel_id']} nicht gefunden.")
+                        return
+
+                    # Nachricht abrufen und aktualisieren
                     message = await channel.fetch_message(stored_embed_data["message_id"])
-                    await message.edit(embed=embed)
-                    logger.info("Clan-Kriegs-Embed erfolgreich aktualisiert.")
-                    return
+                    if message:
+                        await message.edit(embed=embed)
+                        logger.info("Clan-Kriegs-Embed erfolgreich aktualisiert.")
+                        return
                 except discord.NotFound:
                     logger.warning("Vorheriges Embed nicht gefunden. Neues Embed wird erstellt.")
 

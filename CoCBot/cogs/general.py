@@ -22,7 +22,7 @@ class General(commands.Cog):
             description="Ein Bot zur Verwaltung und Unterstützung von Clan-Mitgliedern.",
             color=discord.Color.blue()
         )
-        embed.add_field(name="Version", value="0.2.0", inline=False)
+        embed.add_field(name="Version", value="0.2.1", inline=False)
         embed.add_field(name="Entwickler", value="<@333006296611684352>", inline=False)
         embed.add_field(name="Status", value="Online", inline=False)
         embed.set_footer(text="Clash of Clans Bot - Immer für dich da!")
